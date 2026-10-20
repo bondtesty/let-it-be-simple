@@ -1,0 +1,1154 @@
+diff --git a/src/openpi/models/model.py b/src/openpi/models/model.py
+index 29618b4..4d04ee5 100644
+--- a/src/openpi/models/model.py
++++ b/src/openpi/models/model.py
+@@ -33,6 +33,9 @@ class ModelType(enum.Enum):
+     PI0 = "pi0"
+     PI0_FAST = "pi0_fast"
+     PI05 = "pi05"
++    PI0_SCD = "pi0_scd"
++    PI0_A2A = "pi0_a2a"
++    PI0_RAE = "pi0_rae"
+ 
+ 
+ # The model always expects these images
+@@ -88,9 +91,11 @@ class Observation(Generic[ArrayT]):
+     """
+ 
+     # Images, in [-1, 1] float32.
+-    images: dict[str, at.Float[ArrayT, "*b h w c"]]
++    # Shape: (B, H, W, C) for images or (B, T, H, W, C) for video.
++    images: dict[str, at.Float[ArrayT, "..."]]
+     # Image masks, with same keys as images.
+-    image_masks: dict[str, at.Bool[ArrayT, "*b"]]
++    # Shape: (B,) for images or (B, T) for video.
++    image_masks: dict[str, at.Bool[ArrayT, "..."]]
+     # Low-dimensional robot state.
+     state: at.Float[ArrayT, "*b s"]
+ 
+@@ -99,6 +104,9 @@ class Observation(Generic[ArrayT]):
+     # Tokenized prompt mask.
+     tokenized_prompt_mask: at.Bool[ArrayT, "*b l"] | None = None
+ 
++    # Past state history (for A2A flow matching model).
++    state_history: at.Float[ArrayT, "*b t s"] | None = None
++
+     # pi0-fast model specific fields.
+ 
+     # Token auto-regressive mask (for FAST autoregressive model).
+@@ -106,26 +114,39 @@ class Observation(Generic[ArrayT]):
+     # Token loss mask (for FAST autoregressive model).
+     token_loss_mask: at.Bool[ArrayT, "*b l"] | None = None
+ 
++    # Precomputed DreamDojo DiT features (for PI0_RAE world-model conditioning).
++    dit_features: at.Float[ArrayT, "*b d"] | None = None
++
+     @classmethod
+     def from_dict(cls, data: at.PyTree[ArrayT]) -> "Observation[ArrayT]":
+         """This method defines the mapping between unstructured data (i.e., nested dict) to the structured Observation format."""
+         # Ensure that tokenized_prompt and tokenized_prompt_mask are provided together.
+         if ("tokenized_prompt" in data) != ("tokenized_prompt_mask" in data):
+             raise ValueError("tokenized_prompt and tokenized_prompt_mask must be provided together.")
+-        # If images are uint8, convert them to [-1, 1] float32.
++
++        # Process images: convert uint8 to float32 and handle video input
++        images = {}
+         for key in data["image"]:
+-            if data["image"][key].dtype == np.uint8:
+-                data["image"][key] = data["image"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
+-            elif hasattr(data["image"][key], "dtype") and data["image"][key].dtype == torch.uint8:
+-                data["image"][key] = data["image"][key].to(torch.float32).permute(0, 3, 1, 2) / 255.0 * 2.0 - 1.0
++            img = data["image"][key]
++            if img.dtype == np.uint8:
++                img = img.astype(np.float32) / 255.0 * 2.0 - 1.0
++            elif hasattr(img, "dtype") and img.dtype == torch.uint8:
++                img = img.to(torch.float32).permute(0, 3, 1, 2) / 255.0 * 2.0 - 1.0
++            images[key] = img
++
++        # Process image masks
++        image_masks = dict(data["image_mask"])
++
+         return cls(
+-            images=data["image"],
+-            image_masks=data["image_mask"],
++            images=images,
++            image_masks=image_masks,
+             state=data["state"],
++            state_history=data.get("state_history"),
+             tokenized_prompt=data.get("tokenized_prompt"),
+             tokenized_prompt_mask=data.get("tokenized_prompt_mask"),
+             token_ar_mask=data.get("token_ar_mask"),
+             token_loss_mask=data.get("token_loss_mask"),
++            dit_features=data.get("dit_features"),
+         )
+ 
+     def to_dict(self) -> at.PyTree[ArrayT]:
+@@ -146,13 +167,16 @@ def preprocess_observation(
+     observation: Observation,
+     *,
+     train: bool = False,
+-    image_keys: Sequence[str] = IMAGE_KEYS,
++    image_keys: Sequence[str] | None = None,
+     image_resolution: tuple[int, int] = IMAGE_RESOLUTION,
+ ) -> Observation:
+     """Preprocess the observations by performing image augmentations (if train=True), resizing (if necessary), and
+     filling in a default image mask (if necessary).
+     """
+ 
++    if image_keys is None:
++        image_keys = list(observation.images.keys())
++
+     if not set(image_keys).issubset(observation.images):
+         raise ValueError(f"images dict missing keys: expected {image_keys}, got {list(observation.images)}")
+ 
+@@ -161,6 +185,14 @@ def preprocess_observation(
+     out_images = {}
+     for key in image_keys:
+         image = observation.images[key]
++
++        # Handle video input (B, T, H, W, C) vs image input (B, H, W, C)
++        is_video = image.ndim == 5
++        if is_video:
++            # Reshape video: (B, T, H, W, C) -> (B*T, H, W, C) for processing
++            batch, timesteps = image.shape[:2]
++            image = image.reshape(-1, *image.shape[-3:])  # (B*T, H, W, C)
++
+         if image.shape[1:3] != image_resolution:
+             logger.info(f"Resizing image {key} from {image.shape[1:3]} to {image_resolution}")
+             image = image_tools.resize_with_pad(image, *image_resolution)
+@@ -186,6 +218,10 @@ def preprocess_observation(
+             # Back to [-1, 1].
+             image = image * 2.0 - 1.0
+ 
++        if is_video:
++            # Reshape back: (B*T, H, W, C) -> (B, T, H, W, C)
++            image = image.reshape(batch, timesteps, *image.shape[-3:])
++
+         out_images[key] = image
+ 
+     # obtain mask
+@@ -201,10 +237,12 @@ def preprocess_observation(
+         images=out_images,
+         image_masks=out_masks,
+         state=observation.state,
++        state_history=observation.state_history,
+         tokenized_prompt=observation.tokenized_prompt,
+         tokenized_prompt_mask=observation.tokenized_prompt_mask,
+         token_ar_mask=observation.token_ar_mask,
+         token_loss_mask=observation.token_loss_mask,
++        dit_features=observation.dit_features,
+     )
+ 
+ 
+@@ -237,7 +275,16 @@ class BaseModelConfig(abc.ABC):
+         if remove_extra_params:
+             params = ocp.transform_utils.intersect_trees(state.to_pure_dict(), params)
+         at.check_pytree_equality(expected=state.to_pure_dict(), got=params, check_shapes=True, check_dtypes=False)
+-        state.replace_by_pure_dict(params)
++        # Note: we avoid state.replace_by_pure_dict() because it applies try_convert_int
++        # to pure_dict keys (converting '0' -> 0) but not to flat_state keys, causing
++        # mismatches for modules using nnx.Dict with digit-string keys (e.g. Pi0RAE decoder).
++        current_flat = state.flat_state()
++        for kp, v in traverse_util.flatten_dict(params).items():
++            if kp not in current_flat:
++                raise ValueError(f"key in params not available in state: {kp}")
++            old = current_flat[kp]
++            current_flat[kp] = old.replace(v) if hasattr(old, "replace") else v
++        state.update(traverse_util.unflatten_dict(current_flat))
+         return nnx.merge(graphdef, state)
+ 
+     def load_pytorch(self, train_config, weight_path: str):
+diff --git a/src/openpi/models/pi0.py b/src/openpi/models/pi0.py
+index ae7c459..d243bed 100644
+--- a/src/openpi/models/pi0.py
++++ b/src/openpi/models/pi0.py
+@@ -1,3 +1,4 @@
++import dataclasses
+ import logging
+ 
+ import einops
+@@ -9,8 +10,13 @@ from typing_extensions import override
+ 
+ from openpi.models import model as _model
+ from openpi.models import pi0_config
++from openpi.models.action_patchifier import create_patchifier
+ import openpi.models.gemma as _gemma
++from openpi.models.perceiver_resampler import PerceiverResampler
+ import openpi.models.siglip as _siglip
++from openpi.models.simvla_head import SimVLAHead
++from openpi.models.simvla_head import SimVLAHeadConfig
++import openpi.models.vjepa as _vjepa
+ from openpi.shared import array_typing as at
+ 
+ logger = logging.getLogger("openpi")
+@@ -67,37 +73,221 @@ class Pi0(_model.BaseModel):
+     def __init__(self, config: pi0_config.Pi0Config, rngs: nnx.Rngs):
+         super().__init__(config.action_dim, config.action_horizon, config.max_token_len)
+         self.pi05 = config.pi05
++        self.cond_head_mode = config.cond_head_mode
++        self.n_cond_tokens = config.n_cond_tokens
++        self.prefix_merge_strategy = config.prefix_merge_strategy
++        self.simvla_use_perceiver = getattr(config, "simvla_use_perceiver", True)
++        self.use_vjepa = config.use_vjepa
++        self.vjepa_num_frames = config.vjepa_num_frames
++
++        if self.cond_head_mode == "cond_gemma":
++            if config.pi05:
++                raise ValueError("cond_head_mode='cond_gemma' is only supported for PI0 (pi05=False)")
++            if config.n_cond_tokens is None:
++                raise ValueError("cond_head_mode='cond_gemma' requires n_cond_tokens to be set")
++            if config.prefix_merge_strategy != "post":
++                raise ValueError("cond_head_mode='cond_gemma' requires prefix_merge_strategy='post'")
++        elif self.cond_head_mode == "simvla":
++            if config.pi05:
++                raise ValueError("cond_head_mode='simvla' is only supported for PI0 (pi05=False)")
++            if config.simvla_use_perceiver and config.n_cond_tokens is None:
++                raise ValueError("cond_head_mode='simvla' with perceiver requires n_cond_tokens to be set")
++            if config.prefix_merge_strategy != "post":
++                raise ValueError("cond_head_mode='simvla' requires prefix_merge_strategy='post'")
++
+         paligemma_config = _gemma.get_config(config.paligemma_variant)
+         action_expert_config = _gemma.get_config(config.action_expert_variant)
+-        # TODO: rewrite gemma in NNX. For now, use bridge.
+-        llm = nnx_bridge.ToNNX(
+-            _gemma.Module(
+-                configs=[paligemma_config, action_expert_config],
+-                embed_dtype=config.dtype,
+-                adarms=config.pi05,
+-            )
++
++        if config.paligemma_num_layers is not None:
++            k = config.paligemma_num_layers
++            if k <= 0:
++                raise ValueError("paligemma_num_layers must be positive")
++            if k > paligemma_config.depth:
++                raise ValueError(f"paligemma_num_layers ({k}) must be <= paligemma depth ({paligemma_config.depth})")
++            paligemma_config = dataclasses.replace(paligemma_config, depth=k)
++            # Only couple action expert depth if action_expert_num_layers is not set
++            if config.action_expert_num_layers is None:
++                if k > action_expert_config.depth:
++                    raise ValueError(
++                        f"paligemma_num_layers ({k}) must be <= action expert depth ({action_expert_config.depth})"
++                    )
++                action_expert_config = dataclasses.replace(action_expert_config, depth=k)
++
++        if config.action_expert_num_layers is not None:
++            a = config.action_expert_num_layers
++            if a <= 0:
++                raise ValueError("action_expert_num_layers must be positive")
++            if a > _gemma.get_config(config.action_expert_variant).depth:
++                raise ValueError(f"action_expert_num_layers ({a}) exceeds action expert max depth")
++            action_expert_config = dataclasses.replace(action_expert_config, depth=a)
++
++        # Whether encoder and action expert use separate Gemma modules (needed when depths differ)
++        self._separate_action_expert = (
++            self.cond_head_mode == "cond_gemma" and paligemma_config.depth != action_expert_config.depth
+         )
+-        llm.lazy_init(rngs=rngs, method="init", use_adarms=[False, True] if config.pi05 else [False, False])
+-        img = nnx_bridge.ToNNX(
+-            _siglip.Module(
+-                num_classes=paligemma_config.width,
+-                variant="So400m/14",
+-                pool_type="none",
+-                scan=True,
+-                dtype_mm=config.dtype,
++
++        if config.n_cond_tokens is not None and (self.cond_head_mode != "simvla" or config.simvla_use_perceiver):
++            if paligemma_config.width % config.n_resampler_heads != 0:
++                raise ValueError(
++                    f"n_resampler_heads ({config.n_resampler_heads}) must divide paligemma width ({paligemma_config.width})"
++                )
++            self.prefix_resampler = PerceiverResampler(
++                n_queries=config.n_cond_tokens,
++                dim=paligemma_config.width,
++                n_heads=config.n_resampler_heads,
++                rngs=rngs,
+             )
++        if self.cond_head_mode == "cond_gemma":
++            self.cond_proj = nnx.Linear(paligemma_config.width, action_expert_config.width, rngs=rngs)
++        elif self.cond_head_mode == "simvla":
++            simvla_width = config.simvla_width
++            self.cond_proj = nnx.Linear(paligemma_config.width, simvla_width, rngs=rngs)
++
++        # Determine the action head width for projection layers.
++        head_width = config.simvla_width if self.cond_head_mode == "simvla" else action_expert_config.width
++        self.patchifier = create_patchifier(
++            action_dim=config.action_dim,
++            action_horizon=config.action_horizon,
++            patch_size=config.action_patch_size,
++            method=config.action_patch_method,
++            rngs=rngs,
+         )
+-        img.lazy_init(next(iter(config.fake_obs().images.values())), train=False, rngs=rngs)
+-        self.PaliGemma = nnx.Dict(llm=llm, img=img)
+-        self.action_in_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
++        patch_dim = self.patchifier.patch_dim
++
++        # TODO: rewrite gemma in NNX. For now, use bridge.
++        if self.cond_head_mode == "simvla":
++            # SimVLA: encoder-only LLM + vanilla Transformer action head
++            llm = nnx_bridge.ToNNX(
++                _gemma.Module(
++                    configs=[paligemma_config],
++                    embed_dtype=config.dtype,
++                )
++            )
++            llm.lazy_init(rngs=rngs, method="init", use_adarms=[False])
++            action_llm = None
++            # Create SimVLA head
++            simvla_head_config = SimVLAHeadConfig(
++                depth=config.simvla_depth,
++                width=config.simvla_width,
++                n_heads=config.simvla_n_heads,
++                mlp_dim=config.simvla_mlp_dim,
++                pos_injection=config.simvla_pos_injection,
++                pos_init_std=config.simvla_pos_init_std,
++            )
++            # max seq len depends on whether perceiver is used
++            num_act_tok = config.action_horizon // config.action_patch_size
++            # V-JEPA produces more tokens than SigLIP (392 vs 196 per image with 4 frames)
++            vision_tokens_per_image = 392 if config.use_vjepa else 256
++            if config.simvla_use_perceiver:
++                max_seq_len = (config.n_cond_tokens or 8) + 1 + num_act_tok
++            else:
++                # No perceiver: all VLM tokens (max_token_len text + 3*vision_tokens image) + state + actions
++                max_seq_len = config.max_token_len + 3 * vision_tokens_per_image + 1 + num_act_tok
++            self.simvla_head = SimVLAHead(simvla_head_config, max_seq_len=max_seq_len, rngs=rngs)
++        elif self._separate_action_expert:
++            # Separate modules for encoder and action expert (different depths)
++            llm = nnx_bridge.ToNNX(
++                _gemma.Module(
++                    configs=[paligemma_config],
++                    embed_dtype=config.dtype,
++                )
++            )
++            llm.lazy_init(rngs=rngs, method="init", use_adarms=[False])
++            action_llm = nnx_bridge.ToNNX(
++                _gemma.Module(
++                    configs=[action_expert_config],
++                    embed_dtype=config.dtype,
++                )
++            )
++            action_llm.lazy_init(rngs=rngs, method="init", use_adarms=[False])
++        else:
++            llm = nnx_bridge.ToNNX(
++                _gemma.Module(
++                    configs=[paligemma_config, action_expert_config],
++                    embed_dtype=config.dtype,
++                    adarms=config.pi05,
++                )
++            )
++            llm.lazy_init(rngs=rngs, method="init", use_adarms=[False, True] if config.pi05 else [False, False])
++            action_llm = None
++        # Vision encoder: SigLIP or V-JEPA
++        if config.use_vjepa:
++            # V-JEPA 2.1 video encoder
++            img = nnx_bridge.ToNNX(
++                _vjepa.Module(
++                    variant=config.vjepa_variant,
++                    num_classes=paligemma_config.width,
++                    pool_type="none",
++                    scan=True,
++                    dtype_mm=config.dtype,
++                )
++            )
++            # V-JEPA expects video input (B, T, C, H, W) or image (B, C, H, W)
++            # Create dummy input for lazy_init
++            if config.vjepa_num_frames > 1:
++                # Video input
++                dummy_input = jnp.zeros((1, config.vjepa_num_frames, *_model.IMAGE_RESOLUTION, 3))
++            else:
++                # Image input
++                dummy_input = jnp.zeros((1, *_model.IMAGE_RESOLUTION, 3))
++            img.lazy_init(dummy_input, train=False, rngs=rngs)
++        else:
++            # SigLIP image encoder
++            siglip_kw = {}
++            if config.siglip_num_layers is not None:
++                siglip_kw["depth"] = config.siglip_num_layers
++            img = nnx_bridge.ToNNX(
++                _siglip.Module(
++                    num_classes=paligemma_config.width,
++                    variant="So400m/14",
++                    pool_type="none",
++                    scan=True,
++                    dtype_mm=config.dtype,
++                    **siglip_kw,
++                )
++            )
++            img.lazy_init(next(iter(config.fake_obs().images.values())), train=False, rngs=rngs)
++        if action_llm is not None:
++            self.PaliGemma = nnx.Dict(llm=llm, img=img, action_llm=action_llm)
++        else:
++            self.PaliGemma = nnx.Dict(llm=llm, img=img)
++        self.action_in_proj = nnx.Linear(patch_dim, head_width, rngs=rngs)
+         if config.pi05:
+-            self.time_mlp_in = nnx.Linear(action_expert_config.width, action_expert_config.width, rngs=rngs)
+-            self.time_mlp_out = nnx.Linear(action_expert_config.width, action_expert_config.width, rngs=rngs)
++            self.time_mlp_in = nnx.Linear(head_width, head_width, rngs=rngs)
++            self.time_mlp_out = nnx.Linear(head_width, head_width, rngs=rngs)
+         else:
+-            self.state_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
+-            self.action_time_mlp_in = nnx.Linear(2 * action_expert_config.width, action_expert_config.width, rngs=rngs)
+-            self.action_time_mlp_out = nnx.Linear(action_expert_config.width, action_expert_config.width, rngs=rngs)
+-        self.action_out_proj = nnx.Linear(action_expert_config.width, config.action_dim, rngs=rngs)
++            self.state_proj = nnx.Linear(config.action_dim, head_width, rngs=rngs)
++            self.action_time_mlp_in = nnx.Linear(2 * head_width, head_width, rngs=rngs)
++            self.action_time_mlp_out = nnx.Linear(head_width, head_width, rngs=rngs)
++        self.action_out_proj = nnx.Linear(head_width, patch_dim, rngs=rngs)
++
++        self.noise_shift_alpha = config.noise_shift_alpha
++        self.time_sampling = config.time_sampling
++        self.logit_normal_mu = config.logit_normal_mu
++        self.logit_normal_sigma = config.logit_normal_sigma
++        self.pure_noise_input = config.pure_noise_input
++        self.action_start_mode = config.action_start_mode
++        self.action_start_training = config.action_start_training
++        self.freq_loss_weight = config.freq_loss_weight
++        self.freq_loss_decay = config.freq_loss_decay
++        self.stop_encoder_gradients = config.stop_encoder_gradients
++        self.prediction_type = config.prediction_type
++        self.loss_weighting = config.loss_weighting
++        self.gripper_loss_weight = config.gripper_loss_weight
++        self.gripper_dim = config.gripper_dim
++        self.action_loss_dim = config.action_loss_dim
++        self.num_action_tokens = self.patchifier.num_tokens
++        if config.action_start_mode == "learned":
++            if config.learned_action_start_init == "zero":
++                start = jnp.zeros((1, config.action_horizon, config.action_dim), dtype=jnp.float32)
++            elif config.learned_action_start_init == "normal":
++                start = (
++                    jax.random.normal(rngs.params(), (1, config.action_horizon, config.action_dim), dtype=jnp.float32)
++                    * config.learned_action_start_init_std
++                )
++            else:
++                raise ValueError(f"Unknown learned_action_start_init: {config.learned_action_start_init}")
++            self.learned_action_start = nnx.Param(start)
+ 
+         # This attribute gets automatically set by model.train() and model.eval().
+         self.deterministic = True
+@@ -109,9 +299,11 @@ class Pi0(_model.BaseModel):
+         input_mask = []
+         ar_mask = []
+         tokens = []
+-        # embed images
++        # embed images (or video clips for V-JEPA)
+         for name in obs.images:
+-            image_tokens, _ = self.PaliGemma.img(obs.images[name], train=False)
++            image = obs.images[name]
++            # Data loader now provides proper video frames for V-JEPA (B, T, H, W, C)
++            image_tokens, _ = self.PaliGemma.img(image, train=False)
+ 
+             tokens.append(image_tokens)
+             input_mask.append(
+@@ -134,6 +326,12 @@ class Pi0(_model.BaseModel):
+         tokens = jnp.concatenate(tokens, axis=1)
+         input_mask = jnp.concatenate(input_mask, axis=1)
+         ar_mask = jnp.array(ar_mask)
++
++        if self.n_cond_tokens is not None and self.prefix_merge_strategy == "pre":
++            tokens = self.prefix_resampler(tokens, input_mask)
++            input_mask = jnp.ones(tokens.shape[:2], dtype=jnp.bool_)
++            ar_mask = jnp.zeros((tokens.shape[1],), dtype=jnp.bool_)
++
+         return tokens, input_mask, ar_mask
+ 
+     @at.typecheck
+@@ -156,6 +354,8 @@ class Pi0(_model.BaseModel):
+             # image/language inputs do not attend to state or actions
+             ar_mask += [True]
+ 
++        # Patchify: group P consecutive action steps into one token
++        noisy_actions = self.patchifier.patchify(noisy_actions)
+         action_tokens = self.action_in_proj(noisy_actions)
+         # embed timestep using sine-cosine positional encoding with sensitivity in the range [0, 1]
+         time_emb = posemb_sincos(timestep, self.action_in_proj.out_features, min_period=4e-3, max_period=4.0)
+@@ -169,7 +369,7 @@ class Pi0(_model.BaseModel):
+             adarms_cond = time_emb
+         else:
+             # mix timestep + action information using an MLP (no adaRMS)
+-            time_tokens = einops.repeat(time_emb, "b emb -> b s emb", s=self.action_horizon)
++            time_tokens = einops.repeat(time_emb, "b emb -> b s emb", s=action_tokens.shape[1])
+             action_time_tokens = jnp.concatenate([action_tokens, time_tokens], axis=-1)
+             action_time_tokens = self.action_time_mlp_in(action_time_tokens)
+             action_time_tokens = nnx.swish(action_time_tokens)
+@@ -179,12 +379,67 @@ class Pi0(_model.BaseModel):
+         tokens.append(action_expert_tokens)
+         input_mask.append(jnp.ones(action_expert_tokens.shape[:2], dtype=jnp.bool_))
+         # image/language/state inputs do not attend to action tokens
+-        ar_mask += [True] + ([False] * (self.action_horizon - 1))
++        ar_mask += [True] + ([False] * (self.num_action_tokens - 1))
+         tokens = jnp.concatenate(tokens, axis=1)
+         input_mask = jnp.concatenate(input_mask, axis=1)
+         ar_mask = jnp.array(ar_mask)
+         return tokens, input_mask, ar_mask, adarms_cond
+ 
++    def _unpatchify(self, x):
++        """Unpatchify action output: (B, H//P, patch_dim) → (B, H, D)."""
++        return self.patchifier.unpatchify(x)
++
++    def _action_dim_weights(self, dim: int, dtype):
++        weights = jnp.ones((dim,), dtype=dtype)
++        if self.action_loss_dim is not None:
++            weights = weights * (jnp.arange(dim) < self.action_loss_dim)
++        if self.gripper_loss_weight > 0:
++            weights = weights.at[self.gripper_dim].set(weights[self.gripper_dim] * (1.0 + self.gripper_loss_weight))
++        return weights
++
++    def _freq_weighted_loss(self, v_t, u_t):
++        """Frequency-weighted MSE using 1D DCT along temporal axis (DeCo-inspired)."""
++        horizon = v_t.shape[-2]
++        v_coeff = jax.scipy.fft.dct(v_t, type=2, axis=-2, norm="ortho")
++        u_coeff = jax.scipy.fft.dct(u_t, type=2, axis=-2, norm="ortho")
++        freq_idx = jnp.arange(horizon, dtype=v_t.dtype)
++        weights = jnp.exp(-freq_idx * self.freq_loss_decay)
++        weights = weights / jnp.mean(weights)
++        dim_weights = self._action_dim_weights(v_t.shape[-1], v_t.dtype)
++        freq_sq_err = jnp.square(v_coeff - u_coeff) * dim_weights
++        freq_mse = jnp.sum(freq_sq_err, axis=-1) / jnp.maximum(jnp.sum(dim_weights), 1.0)
++        return freq_mse * weights[None, :]
++
++    def _apply_freq_loss(self, v_t, u_t):
++        """Compute spatial MSE + optional frequency-weighted loss, with optional gripper dim weighting."""
++        dim_weights = self._action_dim_weights(v_t.shape[-1], v_t.dtype)
++        sq_err = jnp.square(v_t - u_t) * dim_weights
++        spatial_loss = jnp.sum(sq_err, axis=-1) / jnp.maximum(jnp.sum(dim_weights), 1.0)
++        if self.freq_loss_weight > 0:
++            return spatial_loss + self.freq_loss_weight * self._freq_weighted_loss(v_t, u_t)
++        return spatial_loss
++
++    def _apply_loss_weighting(self, loss, time):
++        """Apply time-dependent loss weighting. loss: (*b, ah), time: (*b,)."""
++        if self.loss_weighting == "v_weight":
++            # v-prediction loss weight for x-prediction: 1/t² (emphasize low-noise precision)
++            w = jnp.clip(1.0 / jnp.square(time + 1e-3), max=25.0)
++            w = w / jnp.mean(w)
++            return loss * w[..., None]
++        if self.loss_weighting == "min_snr":
++            # min-SNR-gamma: clamp SNR to prevent over-weighting low-noise samples
++            snr = jnp.square(1.0 - time) / jnp.square(time + 1e-3)
++            w = jnp.minimum(snr, 5.0) / (snr + 1e-3)
++            w = w / jnp.mean(w)
++            return loss * w[..., None]
++        return loss
++
++    def _sample_action_start(self, rng: at.KeyArrayLike, shape: tuple[int, ...]):
++        if self.action_start_mode == "learned":
++            start = self.learned_action_start.value
++            return jnp.broadcast_to(start, shape).astype(jnp.float32)
++        return jax.random.normal(rng, shape)
++
+     @override
+     def compute_loss(
+         self, rng: at.KeyArrayLike, observation: _model.Observation, actions: _model.Actions, *, train: bool = False
+@@ -193,25 +448,60 @@ class Pi0(_model.BaseModel):
+         observation = _model.preprocess_observation(preprocess_rng, observation, train=train)
+ 
+         batch_shape = actions.shape[:-2]
+-        noise = jax.random.normal(noise_rng, actions.shape)
+-        time = jax.random.beta(time_rng, 1.5, 1, batch_shape) * 0.999 + 0.001
++        noise = self._sample_action_start(noise_rng, actions.shape)
++        if self.time_sampling == "beta":
++            time = jax.random.beta(time_rng, 1.5, 1, batch_shape) * 0.999 + 0.001
++            # Noise shift: bias timestep distribution toward higher noise levels
++            if self.noise_shift_alpha is not None:
++                alpha = self.noise_shift_alpha
++                time = (alpha * time) / (1.0 + (alpha - 1.0) * time)
++        elif self.time_sampling == "uniform":
++            time = jax.random.uniform(time_rng, batch_shape, minval=0.001, maxval=1.0)
++        elif self.time_sampling == "high_noise":
++            time = jax.random.beta(time_rng, 3.0, 1.0, batch_shape) * 0.999 + 0.001
++        elif self.time_sampling == "logit_normal":
++            logit_time = jax.random.normal(time_rng, batch_shape) * self.logit_normal_sigma + self.logit_normal_mu
++            time = jnp.clip(jax.nn.sigmoid(logit_time), 0.001, 1.0)
++            if self.noise_shift_alpha is not None:
++                alpha = self.noise_shift_alpha
++                time = (alpha * time) / (1.0 + (alpha - 1.0) * time)
++        else:
++            raise ValueError(f"Unknown time_sampling: {self.time_sampling}")
+         time_expanded = time[..., None, None]
+-        x_t = time_expanded * noise + (1 - time_expanded) * actions
++        if self.action_start_training == "direct":
++            x_t = noise
++            time = jnp.ones(batch_shape, dtype=actions.dtype)
++        else:
++            x_t = noise if self.pure_noise_input else time_expanded * noise + (1 - time_expanded) * actions
+         u_t = noise - actions
++        # For x-prediction, the target is the clean data, not the velocity
++        if self.prediction_type == "x_prediction":
++            u_t = actions
+ 
+-        # one big forward pass of prefix + suffix at once
+         prefix_tokens, prefix_mask, prefix_ar_mask = self.embed_prefix(observation)
+         suffix_tokens, suffix_mask, suffix_ar_mask, adarms_cond = self.embed_suffix(observation, x_t, time)
+-        input_mask = jnp.concatenate([prefix_mask, suffix_mask], axis=1)
+-        ar_mask = jnp.concatenate([prefix_ar_mask, suffix_ar_mask], axis=0)
+-        attn_mask = make_attn_mask(input_mask, ar_mask)
+-        positions = jnp.cumsum(input_mask, axis=1) - 1
+-        (prefix_out, suffix_out), _ = self.PaliGemma.llm(
+-            [prefix_tokens, suffix_tokens], mask=attn_mask, positions=positions, adarms_cond=[None, adarms_cond]
+-        )
+-        v_t = self.action_out_proj(suffix_out[:, -self.action_horizon :])
+ 
+-        return jnp.mean(jnp.square(v_t - u_t), axis=-1)
++        if self.cond_head_mode == "cond_gemma":
++            return self._compute_loss_cond_gemma(
++                prefix_tokens, prefix_mask, prefix_ar_mask, suffix_tokens, suffix_mask, suffix_ar_mask, u_t, time
++            )
++
++        if self.cond_head_mode == "simvla":
++            return self._compute_loss_simvla(
++                prefix_tokens, prefix_mask, prefix_ar_mask, suffix_tokens, suffix_mask, u_t, time
++            )
++
++        return self._compute_loss_default(
++            prefix_tokens,
++            prefix_mask,
++            prefix_ar_mask,
++            suffix_tokens,
++            suffix_mask,
++            suffix_ar_mask,
++            adarms_cond,
++            u_t,
++            time,
++        )
+ 
+     @override
+     def sample_actions(
+@@ -221,6 +511,8 @@ class Pi0(_model.BaseModel):
+         *,
+         num_steps: int | at.Int[at.Array, ""] = 10,
+         noise: at.Float[at.Array, "b ah ad"] | None = None,
++        sampling_time_shift: float = 0.0,
++        solver: str = "euler",
+     ) -> _model.Actions:
+         observation = _model.preprocess_observation(None, observation, train=False)
+         # note that we use the convention more common in diffusion literature, where t=1 is noise and t=0 is the target
+@@ -228,14 +520,354 @@ class Pi0(_model.BaseModel):
+         dt = -1.0 / num_steps
+         batch_size = observation.state.shape[0]
+         if noise is None:
+-            noise = jax.random.normal(rng, (batch_size, self.action_horizon, self.action_dim))
++            noise = self._sample_action_start(rng, (batch_size, self.action_horizon, self.action_dim))
+ 
+-        # first fill KV cache with a forward pass of the prefix
++        # time_start: where on [1,0] the Euler walk begins. Default 1.0 (full trajectory).
++        # Positive shift skips early denoising steps — e.g. shift=0.3 → start at t=0.7.
++        time_start = 1.0 - sampling_time_shift
++
++        # first fill KV cache with a forward pass of the (possibly compressed) prefix
+         prefix_tokens, prefix_mask, prefix_ar_mask = self.embed_prefix(observation)
++
++        if self.cond_head_mode == "cond_gemma":
++            if solver != "euler":
++                raise ValueError(f"solver={solver!r} is only implemented for the simvla sampling branch")
++            return self._sample_actions_cond_gemma(
++                prefix_tokens, prefix_mask, prefix_ar_mask, observation, noise, batch_size, dt, time_start
++            )
++
++        if self.cond_head_mode == "simvla":
++            return self._sample_actions_simvla(
++                prefix_tokens, prefix_mask, prefix_ar_mask, observation, noise, batch_size, dt, time_start, solver
++            )
++
++        if solver != "euler":
++            raise ValueError(f"solver={solver!r} is only implemented for the simvla sampling branch")
++        return self._sample_actions_default(
++            prefix_tokens, prefix_mask, prefix_ar_mask, observation, noise, batch_size, dt, time_start
++        )
++
++    # === compute_loss branch helpers ===
++
++    def _compute_loss_cond_gemma(
++        self,
++        prefix_tokens,
++        prefix_mask,
++        prefix_ar_mask,
++        suffix_tokens,
++        suffix_mask,
++        suffix_ar_mask,
++        u_t,
++        time,
++    ):
++        # === COND_GEMMA: compute_loss ===
++        # Prefix encoding → concat → action LLM → unpatchify → apply losses
++        prefix_attn_mask = make_attn_mask(prefix_mask, prefix_ar_mask)
++        prefix_positions = jnp.cumsum(prefix_mask, axis=1) - 1
++        if self._separate_action_expert:
++            (prefix_out,), _ = self.PaliGemma.llm(
++                [prefix_tokens],
++                mask=prefix_attn_mask,
++                positions=prefix_positions,
++            )
++        else:
++            (prefix_out, _), _ = self.PaliGemma.llm(
++                [prefix_tokens, None],
++                mask=prefix_attn_mask,
++                positions=prefix_positions,
++            )
++
++        cond_tokens_2b = self.prefix_resampler(prefix_out, prefix_mask)
++        cond_tokens = self.cond_proj(cond_tokens_2b)
++        cond_mask = jnp.ones(cond_tokens.shape[:2], dtype=jnp.bool_)
++        cond_ar_mask = jnp.zeros((cond_tokens.shape[1],), dtype=jnp.bool_)
++
++        head_tokens = jnp.concatenate([cond_tokens, suffix_tokens], axis=1)
++        input_mask = jnp.concatenate([cond_mask, suffix_mask], axis=1)
++        ar_mask = jnp.concatenate([cond_ar_mask, suffix_ar_mask], axis=0)
++        attn_mask = make_attn_mask(input_mask, ar_mask)
++        positions = jnp.cumsum(input_mask, axis=1) - 1
++        if self._separate_action_expert:
++            (head_out,), _ = self.PaliGemma.action_llm(
++                [head_tokens],
++                mask=attn_mask,
++                positions=positions,
++            )
++        else:
++            (_, head_out), _ = self.PaliGemma.llm(
++                [None, head_tokens],
++                mask=attn_mask,
++                positions=positions,
++            )
++        v_t = self._unpatchify(self.action_out_proj(head_out[:, -self.num_action_tokens :]))
++
++        return self._apply_loss_weighting(self._apply_freq_loss(v_t, u_t), time)
++
++    def _compute_loss_simvla(
++        self,
++        prefix_tokens,
++        prefix_mask,
++        prefix_ar_mask,
++        suffix_tokens,
++        suffix_mask,
++        u_t,
++        time,
++    ):
++        # === SIMVLA: compute_loss ===
++        # PaliGemma encoder → (optional Perceiver) → SimVLA Transformer head → unpatchify → apply losses
++        prefix_attn_mask = make_attn_mask(prefix_mask, prefix_ar_mask)
++        prefix_positions = jnp.cumsum(prefix_mask, axis=1) - 1
++        (prefix_out,), _ = self.PaliGemma.llm(
++            [prefix_tokens],
++            mask=prefix_attn_mask,
++            positions=prefix_positions,
++        )
++
++        if self.stop_encoder_gradients:
++            prefix_out = jax.lax.stop_gradient(prefix_out)
++
++        if self.simvla_use_perceiver:
++            cond_tokens_2b = self.prefix_resampler(prefix_out, prefix_mask)
++            cond_tokens = self.cond_proj(cond_tokens_2b)
++            cond_mask = jnp.ones(cond_tokens.shape[:2], dtype=jnp.bool_)
++        else:
++            cond_tokens = self.cond_proj(prefix_out)
++            cond_mask = prefix_mask
++
++        head_tokens = jnp.concatenate([cond_tokens, suffix_tokens], axis=1)
++        input_mask = jnp.concatenate([cond_mask, suffix_mask], axis=1)
++
++        head_out = self.simvla_head(head_tokens, mask=input_mask)
++        v_t = self._unpatchify(self.action_out_proj(head_out[:, -self.num_action_tokens :]))
++
++        return self._apply_loss_weighting(self._apply_freq_loss(v_t, u_t), time)
++
++    def _compute_loss_default(
++        self,
++        prefix_tokens,
++        prefix_mask,
++        prefix_ar_mask,
++        suffix_tokens,
++        suffix_mask,
++        suffix_ar_mask,
++        adarms_cond,
++        u_t,
++        time,
++    ):
++        # === DEFAULT: compute_loss ===
++        # (prefix merge post + cond tokens) OR (no merge, full concat) → unpatchify → apply losses
++        if self.n_cond_tokens is not None and self.prefix_merge_strategy == "post":
++            prefix_attn_mask = make_attn_mask(prefix_mask, prefix_ar_mask)
++            prefix_positions = jnp.cumsum(prefix_mask, axis=1) - 1
++            (prefix_out, _), _ = self.PaliGemma.llm(
++                [prefix_tokens, None],
++                mask=prefix_attn_mask,
++                positions=prefix_positions,
++            )
++
++            cond_tokens = self.prefix_resampler(prefix_out, prefix_mask)
++            cond_mask = jnp.ones(cond_tokens.shape[:2], dtype=jnp.bool_)
++            cond_ar_mask = jnp.zeros((cond_tokens.shape[1],), dtype=jnp.bool_)
++
++            input_mask = jnp.concatenate([cond_mask, suffix_mask], axis=1)
++            ar_mask = jnp.concatenate([cond_ar_mask, suffix_ar_mask], axis=0)
++            attn_mask = make_attn_mask(input_mask, ar_mask)
++            positions = jnp.cumsum(input_mask, axis=1) - 1
++            (_, suffix_out), _ = self.PaliGemma.llm(
++                [cond_tokens, suffix_tokens],
++                mask=attn_mask,
++                positions=positions,
++                adarms_cond=[None, adarms_cond],
++            )
++        else:
++            input_mask = jnp.concatenate([prefix_mask, suffix_mask], axis=1)
++            ar_mask = jnp.concatenate([prefix_ar_mask, suffix_ar_mask], axis=0)
++            attn_mask = make_attn_mask(input_mask, ar_mask)
++            positions = jnp.cumsum(input_mask, axis=1) - 1
++            (_, suffix_out), _ = self.PaliGemma.llm(
++                [prefix_tokens, suffix_tokens],
++                mask=attn_mask,
++                positions=positions,
++                adarms_cond=[None, adarms_cond],
++            )
++        v_t = self._unpatchify(self.action_out_proj(suffix_out[:, -self.num_action_tokens :]))
++
++        return self._apply_loss_weighting(self._apply_freq_loss(v_t, u_t), time)
++
++    # === sample_actions branch helpers ===
++
++    def _sample_actions_cond_gemma(
++        self,
++        prefix_tokens,
++        prefix_mask,
++        prefix_ar_mask,
++        observation,
++        noise,
++        batch_size,
++        dt,
++        time_start: float = 1.0,
++    ):
++        # === COND_GEMMA: sample_actions ===
++        # Prefix encoding → concat → action LLM (per step) → unpatchify → Euler step
++        prefix_attn_mask = make_attn_mask(prefix_mask, prefix_ar_mask)
++        positions = jnp.cumsum(prefix_mask, axis=1) - 1
++        if self._separate_action_expert:
++            (prefix_out,), _ = self.PaliGemma.llm([prefix_tokens], mask=prefix_attn_mask, positions=positions)
++        else:
++            (prefix_out, _), _ = self.PaliGemma.llm([prefix_tokens, None], mask=prefix_attn_mask, positions=positions)
++
++        cond_tokens_2b = self.prefix_resampler(prefix_out, prefix_mask)
++        cond_tokens = self.cond_proj(cond_tokens_2b)
++        cond_mask = jnp.ones(cond_tokens.shape[:2], dtype=jnp.bool_)
++        cond_ar_mask = jnp.zeros((cond_tokens.shape[1],), dtype=jnp.bool_)
++
++        _separate = self._separate_action_expert
++        _x_pred_cg = self.prediction_type == "x_prediction"
++
++        def step(carry):
++            x_t, time = carry
++            suffix_tokens, suffix_mask, suffix_ar_mask, _ = self.embed_suffix(
++                observation, x_t, jnp.broadcast_to(time, batch_size)
++            )
++            head_tokens = jnp.concatenate([cond_tokens, suffix_tokens], axis=1)
++            input_mask = jnp.concatenate([cond_mask, suffix_mask], axis=1)
++            ar_mask = jnp.concatenate([cond_ar_mask, suffix_ar_mask], axis=0)
++            attn_mask = make_attn_mask(input_mask, ar_mask)
++            positions = jnp.cumsum(input_mask, axis=1) - 1
++
++            if _separate:
++                (head_out,), _ = self.PaliGemma.action_llm([head_tokens], mask=attn_mask, positions=positions)
++            else:
++                (_, head_out), _ = self.PaliGemma.llm([None, head_tokens], mask=attn_mask, positions=positions)
++            out = self._unpatchify(self.action_out_proj(head_out[:, -self.num_action_tokens :]))
++
++            if _x_pred_cg:  # noqa: SIM108
++                v_t = (x_t - out) / jnp.maximum(time, 1e-6)
++            else:
++                v_t = out
++
++            return x_t + dt * v_t, time + dt
++
++        def cond(carry):
++            _, time = carry
++            # robust to floating-point error
++            return time >= -dt / 2
++
++        x_0, _ = jax.lax.while_loop(cond, step, (noise, time_start))
++        return x_0
++
++    def _sample_actions_simvla(
++        self,
++        prefix_tokens,
++        prefix_mask,
++        prefix_ar_mask,
++        observation,
++        noise,
++        batch_size,
++        dt,
++        time_start: float = 1.0,
++        solver: str = "euler",
++    ):
++        # === SIMVLA: sample_actions ===
++        # Encode prefix once → run SimVLA head per denoising step → unpatchify → ODE step.
++        # solver: "euler" (N head evals), "heun" (explicit trapezoidal RK2, 2N evals),
++        # or "rk4" (classic 4th-order Runge-Kutta, 4N evals).
++        prefix_attn_mask = make_attn_mask(prefix_mask, prefix_ar_mask)
++        positions = jnp.cumsum(prefix_mask, axis=1) - 1
++        (prefix_out,), _ = self.PaliGemma.llm([prefix_tokens], mask=prefix_attn_mask, positions=positions)
++
++        if self.simvla_use_perceiver:
++            cond_tokens_2b = self.prefix_resampler(prefix_out, prefix_mask)
++            cond_tokens = self.cond_proj(cond_tokens_2b)
++            cond_mask = jnp.ones(cond_tokens.shape[:2], dtype=jnp.bool_)
++        else:
++            cond_tokens = self.cond_proj(prefix_out)
++            cond_mask = prefix_mask
++
++        _x_pred = self.prediction_type == "x_prediction"
++
++        def velocity(x_t, time):
++            suffix_tokens, suffix_mask, _, _ = self.embed_suffix(observation, x_t, jnp.broadcast_to(time, batch_size))
++            head_tokens = jnp.concatenate([cond_tokens, suffix_tokens], axis=1)
++            input_mask = jnp.concatenate([cond_mask, suffix_mask], axis=1)
++
++            head_out = self.simvla_head(head_tokens, mask=input_mask)
++            out = self._unpatchify(self.action_out_proj(head_out[:, -self.num_action_tokens :]))
++
++            if _x_pred:
++                # x-prediction: model outputs x_0_hat, convert to velocity
++                return (x_t - out) / jnp.maximum(time, 1e-6)
++            return out
++
++        def cond(carry):
++            _, time, _ = carry
++            return time >= -dt / 2
++
++        if solver == "euler":
++
++            def step(carry):
++                x_t, time, _ = carry
++                v_t = velocity(x_t, time)
++                return x_t + dt * v_t, time + dt, v_t
++
++            x_0, _, _ = jax.lax.while_loop(cond, step, (noise, time_start, jnp.zeros_like(noise)))
++            return x_0
++
++        if solver == "heun":
++            # Explicit trapezoidal RK2. (No FSAL: k2 is evaluated at the Euler-predicted point,
++            # not at the corrected point, so it cannot be reused as the next step's k1.)
++            def step(carry):
++                x_t, time, _ = carry
++                k1 = velocity(x_t, time)
++                k2 = velocity(x_t + dt * k1, time + dt)
++                return x_t + dt * (k1 + k2) / 2, time + dt, k1
++
++            x_0, _, _ = jax.lax.while_loop(cond, step, (noise, time_start, jnp.zeros_like(noise)))
++            return x_0
++
++        if solver == "rk4":
++
++            def step(carry):
++                x_t, time, _ = carry
++                k1 = velocity(x_t, time)
++                k2 = velocity(x_t + dt * k1 / 2, time + dt / 2)
++                k3 = velocity(x_t + dt * k2 / 2, time + dt / 2)
++                k4 = velocity(x_t + dt * k3, time + dt)
++                return x_t + dt * (k1 + 2 * k2 + 2 * k3 + k4) / 6, time + dt, k1
++
++            x_0, _, _ = jax.lax.while_loop(cond, step, (noise, time_start, jnp.zeros_like(noise)))
++            return x_0
++
++        raise ValueError(f"Unsupported solver {solver!r}; expected one of: euler, heun, rk4")
++
++    def _sample_actions_default(
++        self,
++        prefix_tokens,
++        prefix_mask,
++        prefix_ar_mask,
++        observation,
++        noise,
++        batch_size,
++        dt,
++        time_start: float = 1.0,
++    ):
++        # === DEFAULT: sample_actions ===
++        # (prefix merge post) OR (no merge) → KV-cache prefix → per-step suffix → unpatchify → Euler step
++        if self.n_cond_tokens is not None and self.prefix_merge_strategy == "post":
++            prefix_attn_mask = make_attn_mask(prefix_mask, prefix_ar_mask)
++            positions = jnp.cumsum(prefix_mask, axis=1) - 1
++            (prefix_out, _), _ = self.PaliGemma.llm([prefix_tokens, None], mask=prefix_attn_mask, positions=positions)
++
++            prefix_tokens = self.prefix_resampler(prefix_out, prefix_mask)
++            prefix_mask = jnp.ones(prefix_tokens.shape[:2], dtype=jnp.bool_)
++            prefix_ar_mask = jnp.zeros((prefix_tokens.shape[1],), dtype=jnp.bool_)
++
+         prefix_attn_mask = make_attn_mask(prefix_mask, prefix_ar_mask)
+         positions = jnp.cumsum(prefix_mask, axis=1) - 1
+         _, kv_cache = self.PaliGemma.llm([prefix_tokens, None], mask=prefix_attn_mask, positions=positions)
+ 
++        _x_pred_std = self.prediction_type == "x_prediction"
++
+         def step(carry):
+             x_t, time = carry
+             suffix_tokens, suffix_mask, suffix_ar_mask, adarms_cond = self.embed_suffix(
+@@ -266,7 +898,12 @@ class Pi0(_model.BaseModel):
+                 adarms_cond=[None, adarms_cond],
+             )
+             assert prefix_out is None
+-            v_t = self.action_out_proj(suffix_out[:, -self.action_horizon :])
++            out = self._unpatchify(self.action_out_proj(suffix_out[:, -self.num_action_tokens :]))
++
++            if _x_pred_std:  # noqa: SIM108
++                v_t = (x_t - out) / jnp.maximum(time, 1e-6)
++            else:
++                v_t = out
+ 
+             return x_t + dt * v_t, time + dt
+ 
+@@ -275,5 +912,5 @@ class Pi0(_model.BaseModel):
+             # robust to floating-point error
+             return time >= -dt / 2
+ 
+-        x_0, _ = jax.lax.while_loop(cond, step, (noise, 1.0))
++        x_0, _ = jax.lax.while_loop(cond, step, (noise, time_start))
+         return x_0
+diff --git a/src/openpi/models/pi0_config.py b/src/openpi/models/pi0_config.py
+index b0f6b66..7e6363d 100644
+--- a/src/openpi/models/pi0_config.py
++++ b/src/openpi/models/pi0_config.py
+@@ -1,5 +1,6 @@
+ import dataclasses
+-from typing import TYPE_CHECKING
++import logging
++from typing import TYPE_CHECKING, Literal
+ 
+ import flax.nnx as nnx
+ import jax
+@@ -7,6 +8,7 @@ import jax.numpy as jnp
+ from typing_extensions import override
+ 
+ from openpi.models import model as _model
++from openpi.models.action_patchifier import PatchMethod
+ import openpi.models.gemma as _gemma
+ from openpi.shared import array_typing as at
+ import openpi.shared.nnx_utils as nnx_utils
+@@ -21,6 +23,93 @@ class Pi0Config(_model.BaseModelConfig):
+     paligemma_variant: _gemma.Variant = "gemma_2b"
+     action_expert_variant: _gemma.Variant = "gemma_300m"
+ 
++    paligemma_num_layers: int | None = None
++    action_expert_num_layers: int | None = (
++        None  # Independent action expert depth (cond_gemma only). Defaults to paligemma_num_layers.
++    )
++    siglip_num_layers: int | None = None  # Truncate SigLiP encoder layers. None = use all (27 for So400m).
++
++    # V-JEPA encoder config (alternative to SigLIP)
++    use_vjepa: bool = False  # Use V-JEPA 2.1 instead of SigLIP
++    vjepa_variant: str = "vit_l"  # "vit_b", "vit_l", "vit_g"
++    vjepa_num_frames: int = 4  # Number of video frames to input
++
++    cond_head_mode: Literal["pi0", "cond_gemma", "simvla"] = "pi0"
++
++    # SimVLA head config (only used when cond_head_mode="simvla")
++    simvla_depth: int = 4
++    simvla_width: int = 768
++    simvla_n_heads: int = 12
++    simvla_mlp_dim: int = 3072
++    simvla_use_perceiver: bool = True  # False = feed all VLM tokens to head (paper default)
++    simvla_pos_injection: Literal["input", "per_layer", "rope"] = "input"
++    simvla_pos_init_std: float = 0.0
++
++    # Noise shift alpha for flow matching. None = standard Beta(1.5,1).
++    # Effective when time_sampling is "beta" or "logit_normal".
++    noise_shift_alpha: float | None = None
++
++    # Time sampling strategy for flow matching training.
++    # "beta" (default): Beta(1.5, 1), optionally combined with noise_shift_alpha.
++    # "uniform": Uniform(0.001, 1.0).
++    # "high_noise": Beta(3.0, 1.0), strongly biased toward high noise levels.
++    # "logit_normal": sigmoid(N(mu, sigma)); can also be combined with noise_shift_alpha.
++    time_sampling: Literal["beta", "uniform", "high_noise", "logit_normal"] = "beta"
++    logit_normal_mu: float = 0.0
++    logit_normal_sigma: float = 1.0
++
++    # If True, training always uses pure noise (x_t = noise) instead of the
++    # standard noise-action interpolation. The timestep is still sampled and
++    # embedded, but the input action tokens carry no clean action information.
++    # This tests single-step generation capability.
++    pure_noise_input: bool = False
++
++    # Initial action token source for flow sampling/training. "noise" is the
++    # standard diffusion/flow prior; "learned" replaces it with a trainable
++    # action-space token that is also used at inference.
++    action_start_mode: Literal["noise", "learned"] = "noise"
++    learned_action_start_init: Literal["zero", "normal"] = "zero"
++    learned_action_start_init_std: float = 1.0
++    # "interpolate" uses x_t = t * start + (1 - t) * action. "direct" uses
++    # x_t = start and t = 1, which is intended for one-step x-prediction runs.
++    action_start_training: Literal["interpolate", "direct"] = "interpolate"
++
++    # Time shift for sampling. 0.0 = start at t=1.0 (default).
++    # Positive values skip the early denoising steps:
++    #   shift=0.3 → start at t=0.7, steps cover [0.7, 0.0]
++    # This concentrates Euler steps on the higher-quality portion of the trajectory,
++    # similar to how training biases toward lower t via Beta(1.5,1).
++    sampling_time_shift: float = 0.0
++
++    # Frequency-weighted loss (DeCo-inspired). 0.0 = disabled.
++    freq_loss_weight: float = 0.0
++    freq_loss_decay: float = 1.0  # Exponential decay rate for DCT frequency weighting.
++
++    # UNITE-style stop-gradient: prevent denoising gradients from flowing into VLM encoder.
++    stop_encoder_gradients: bool = False
++
++    # Prediction type: "velocity" (default, v-pred) or "x_prediction" (predict clean data x_0).
++    prediction_type: Literal["velocity", "x_prediction"] = "velocity"
++
++    # Loss weighting: "uniform" (default), "v_weight" (1/t² — emphasize low-noise precision),
++    # "min_snr" (min-SNR-gamma clamped weighting).
++    loss_weighting: Literal["uniform", "v_weight", "min_snr"] = "uniform"
++
++    # Action patchification: group P consecutive action steps into one token. 1 = no patching.
++    action_patch_size: int = 1
++    action_patch_method: PatchMethod = "concat"
++
++    # Gripper-aware loss: extra weight for the gripper action dimension.
++    # The gripper dim (binary open/close) is qualitatively different from continuous EE pose dims.
++    # This multiplies the MSE loss on the specified dim by (1 + gripper_loss_weight).
++    # 0.0 = no extra weight (default, same as treating all dims equally).
++    gripper_loss_weight: float = 0.0
++    gripper_dim: int = 6  # Which action dim is the gripper (after padding to action_dim).
++    # If set, only the first N action dimensions contribute to the flow-matching loss.
++    # This is useful for datasets such as Bridge where model inputs may be padded to
++    # action_dim=32, but only the first 7 action dimensions are semantically real.
++    action_loss_dim: int | None = None
++
+     # Set the model specific defaults.
+     action_dim: int = 32
+     action_horizon: int = 50
+@@ -32,11 +121,35 @@ class Pi0Config(_model.BaseModelConfig):
+     # This config option is not used directly by the model, but it is read by the ModelTransformFactory.
+     discrete_state_input: bool = None  # type: ignore
+ 
++    n_cond_tokens: int | None = None
++    prefix_merge_strategy: Literal["pre", "post"] = "pre"
++    n_resampler_heads: int = 8
++
+     def __post_init__(self):
+         if self.max_token_len is None:
+             object.__setattr__(self, "max_token_len", 200 if self.pi05 else 48)
+         if self.discrete_state_input is None:
+             object.__setattr__(self, "discrete_state_input", self.pi05)
++        if self.action_patch_size > 1 and self.action_horizon % self.action_patch_size != 0:
++            raise ValueError(
++                f"action_horizon ({self.action_horizon}) must be divisible by action_patch_size ({self.action_patch_size})"
++            )
++        if self.time_sampling not in ("beta", "logit_normal") and self.noise_shift_alpha is not None:
++            logging.warning(
++                f"time_sampling is '{self.time_sampling}', so noise_shift_alpha={self.noise_shift_alpha} "
++                "will be ignored. noise_shift_alpha only takes effect when time_sampling is 'beta' or 'logit_normal'."
++            )
++        if self.logit_normal_sigma <= 0:
++            raise ValueError(f"logit_normal_sigma must be positive, got {self.logit_normal_sigma}")
++        if self.learned_action_start_init_std <= 0:
++            raise ValueError(
++                f"learned_action_start_init_std must be positive, got {self.learned_action_start_init_std}"
++            )
++        if self.action_loss_dim is not None and not (0 < self.action_loss_dim <= self.action_dim):
++            raise ValueError(
++                f"action_loss_dim must be in [1, action_dim], got action_loss_dim={self.action_loss_dim} "
++                f"and action_dim={self.action_dim}"
++            )
+ 
+     @property
+     @override
