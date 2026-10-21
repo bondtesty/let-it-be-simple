@@ -77,9 +77,8 @@ developed on):
 
 - `src/openpi/training/misc/paper_configs.py` — the paper's 25 run configs
 - `src/openpi/training/misc/CONFIG_NAMES.txt` — the released config names
-- `experiments/`, `diagnostics/`, `eval/`, `figures/` — theory
-  validations, diagnostic protocols, LIBERO evaluation harness, and
-  figure rendering scripts
+- `experiments/`, `diagnostics/`, `eval/` — theory validations,
+  diagnostic protocols, and the LIBERO evaluation harness
 - `experiments/pi0-endpoint-geometry/` — 11 analysis helper modules written for
   this paper (endpoint/episode sigma-1 probes, dense sheet tracking,
   commit-mechanism and causal scans). Their checkpoint roots read `LBS_CKPT_ROOT`;

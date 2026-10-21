@@ -127,7 +127,6 @@ diagnostics/      velocity-MSE, endpoint-Jacobian / sigma-1, local geometry,
                   condition ablations, mode-collapse probe, latency profiling
 eval/             LIBERO / LIBERO-Plus / LIBERO-Pro, plus the policy
                     server used by third-party benchmark harnesses
-figures/          scripts that render the paper figures from diagnostic output
 ```
 
 See `NOTICE` for the exact provenance of the vendored code and the list of
@@ -201,15 +200,18 @@ paper's LIBERO protocol is 500 episodes per suite (stated in Tables 3 and 7).
 LIBERO-Plus and LIBERO-Pro are third-party benchmarks; follow their repos for
 environment setup.
 
-## Diagnostics & figures
+## Diagnostics
+Each script here measures something against a released checkpoint or public
+data and writes its own output -- none of them need artifacts from us.
+Protocols (matched-noise anchors, 25 paper times, 7-dim action slicing,
+Jacobian estimators) are documented in the paper appendices and mirrored in
+the script docstrings; the local-geometry helpers live in
+`experiments/pi0-endpoint-geometry/`.
 
-Every figure number in the paper is recomputable from `diagnostics/` outputs
-using `figures/render_*.py`. Protocols (matched-noise anchors, 25 paper times,
-7-dim action slicing, Jacobian estimators) are documented in the paper
-appendices and mirrored in the script docstrings. The local-geometry analysis
-helpers ship in `experiments/pi0-endpoint-geometry/`; the diagnostic CSVs and
-result JSONs backing the current figure set are not yet released (see
-REPRODUCTION_MAP.md).
+The plotting layer that drew the paper's figures is deliberately not part of
+this release. Those scripts read an internal result tree we are not
+publishing, so they could not run for anyone else; what ships here is the code
+that produces the measured quantities behind those figures.
 
 ## Checkpoints
 
@@ -253,7 +255,6 @@ remains importable/`--help`-able on a fresh clone.
 | Variable | Meaning | Default | When you must set it |
 |---|---|---|---|
 | `LBS_CKPT_ROOT` | Root of the checkpoint tree: trained openpi policy checkpoints and the converted V-JEPA 2.1 weights referenced by `src/openpi/training/misc/paper_configs.py`, plus the checkpoints loaded by the local-geometry diagnostics | `/path/to/checkpoints` | To train, evaluate, or run checkpoint-loading diagnostics |
-| `LBS_RESULTS_ROOT` | Root of the experiment-artifact tree read by `figures/render_*.py` (experiment result JSONs, diagnostic/eval CSVs, tile images) | `results` | To render figures or run diagnostics that read produced artifacts |
 | `LBS_LIBERO_PLUS_ROOT` | Location of the LIBERO-Plus checkout / LeRobot snapshot used by the LIBERO-Plus readiness check and eval wrapper | `/path/to/libero-plus` | For anything LIBERO-Plus |
 
 Scripts are published as a reproducibility archive and have not been
@@ -277,4 +278,4 @@ are not.
   distributed under the separate terms in `LICENSE_GEMMA.txt` and must be
   downloaded separately.
 - The paper-specific additions (`src/openpi/training/misc/paper_configs.py`,
-  `experiments/`, `diagnostics/`, `eval/`, `figures/`): Apache-2.0.
+  `experiments/`, `diagnostics/`, `eval/`): Apache-2.0.
