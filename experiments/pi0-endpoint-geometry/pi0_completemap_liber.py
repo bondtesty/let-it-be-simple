@@ -4,7 +4,7 @@ T_c(z) = full deployed generator: Euler rollout of sample_actions (v-pred,
 default solver), t: 1 -> 0, x_{t-1/N} = x_t - (1/N) v(x_t, t), replicated
 import os
 from openpi _sample_actions_simvla. Differentiated with matrix-tangent JVP
-(reuse of the issue-7 kernel infra), restricted to the real action block.
+(reuses the existing kernel infrastructure), restricted to the real action block.
 
 Checkpoints: h20_a4, h10_a4 (interp), h10 pure-noise.
 NFE sweep: {1, 2, 4, 10} (deployed default 10).

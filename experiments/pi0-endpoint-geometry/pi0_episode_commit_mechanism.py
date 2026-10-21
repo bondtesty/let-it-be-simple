@@ -1,7 +1,7 @@
-"""Issue-8 mechanism audit (v2): gripper commit-timing vs arm-trajectory
+"""Mechanism audit: gripper commit-timing vs arm-trajectory
 collapse — corrected statistics.
 
-Fixes vs v1 (per issue-8 review):
+Fixes relative to the first pass:
   1. proper permutation null: each permutation rolls the CURVE within each
      episode (circular) and evaluates the ORIGINAL boundary positions;
      one aggregate scalar per permutation; p = (1 + #{null >= obs}) / (N+1);
@@ -308,7 +308,7 @@ def make_plots(out) -> None:
                            alpha=0.4, lw=0.9)
         ax.set_title(ttl, fontsize=10)
     axes.flat[0].legend(fontsize=7)
-    fig.suptitle("issue-8 mechanism audit v2 (red=to_closed, blue=to_open)", fontsize=11)
+    fig.suptitle("gripper commit-timing audit (red=to_closed, blue=to_open)", fontsize=11)
     fig.tight_layout()
     p = RESULTS_DIR / "pi0_episode_commit_mechanism.png"
     fig.savefig(p, dpi=160)
