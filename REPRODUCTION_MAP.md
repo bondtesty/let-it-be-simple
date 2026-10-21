@@ -28,10 +28,10 @@ Legend: ✅ released · ⚠️ released but needs author confirmation · ⛔ not
 ## Open questions for the author
 
 1. **α bookkeeping**: most `pi0_libero_simvla_*` configs carry `noise_shift_alpha=3.0`,
-   while the paper figures advertise α=4 (7 configs at 4.0 exist). Which family produced
+   while the paper figures advertise α=4 (6 configs at 4.0 exist). Which family produced
    the reported tables — and is the `k4` in config names historical?
 2. Exact config names behind each row of the schedule-ablation and full-encoder tables
-   (`configs/CONFIG_NAMES.txt` has 171 candidates).
+   (`configs/CONFIG_NAMES.txt` has 85 candidates).
 3. MNIST / 8-mode: `experiments/*/README.md` list the candidate scripts I matched by
    hyperparameters — confirm the canonical ones (see each README's NEEDS AUTHOR CONFIRMATION).
 4. Checkpoint release: HF repo name & which of the tiny/full checkpoints to ship.

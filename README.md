@@ -25,7 +25,7 @@ evaluation harness.
 
 ```
 patches/          overlay onto openpi (the method lives here)
-configs/          the paper's LIBERO run configs (171 TrainConfigs)
+configs/          the paper's LIBERO run configs (85 TrainConfigs)
 experiments/      self-contained validations of the theory
   toy_8mode/        controlled 8-mode Gaussian toy
   mnist_i2t/        image-to-text MNIST flow experiment
