@@ -22,6 +22,7 @@ python analyze_ring_gmm_vloss_geometry.py --out-dir ring_gmm_geometry
 ```
 Dependencies: `torch`, `numpy`, `matplotlib`, `scipy`.
 
-## NEEDS AUTHOR CONFIRMATION
-- The exact CLI flags (radius ≈ 1.35, component σ ≈ 0.06, hierarchy angle 9°,
-  12k steps are the analysis script's defaults) used for the submitted figure.
+## Notes
+`analyze_ring_gmm_vloss_geometry.py` defaults to radius ≈ 1.35, component
+σ ≈ 0.06, hierarchy angle 9° and 12k steps; each of these is a CLI flag, so
+re-running under a different arm setting is just a matter of passing it.

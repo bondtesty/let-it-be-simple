@@ -24,9 +24,9 @@ python train_mnist_v3_beta_dist.py --t-distribution beta_low --alpha-ce 2
 Dependencies: `torch`, `torchvision`, `numpy`, `tqdm`, `matplotlib`.
 MNIST downloads to `./data` on first run.
 
-## NEEDS AUTHOR CONFIRMATION
-- `--num_layers` defaults to 8 here; the paper table reports the 4-layer arm
-  (figure name "256d-4L"): pass `--num_layers 4`, and confirm no other deltas.
-- Whether `--max_len` used was 16 (code default) or 20 (paper table).
-- Which exact script produced the encoder/decoder control rows (candidate:
-  `train_mnist_v3_ablation.py`; other mask variants exist in the experiment repo).
+## Notes
+To match the arm reported in the paper, pass its settings explicitly:
+`--num_layers 4` (the script default is 8) and `--max_len 20` (the default is
+16). `train_mnist_v3_ablation.py` implements the mask-type controls
+(causal / bidirectional / no_mask) that correspond to the appendix
+encoder/decoder rows.

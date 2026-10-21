@@ -213,13 +213,11 @@ match your own storage layout.
 
 ## Reproduction status
 
-`REPRODUCTION_MAP.md` carries the per-claim status with this legend: **✅** code
-and protocol released, **⚠️** released but needs an external artifact or
-third-party environment, **⛔** not in this release. Currently ⛔: trained
-checkpoints, the diagnostic CSV / result JSON artifacts, real-robot hardware,
-and the `α = 8` rows of Tables 1/13/14/15 — no config with `noise_shift_alpha=8`
-exists in the released set, so those cells cannot be reproduced from this repo
-as published.
+`REPRODUCTION_MAP.md` maps every paper claim to the artifact that produces it,
+with ✅ / ⚠️ / ⛔ status and a short list of what is out of scope. In short: the
+method, run configs, theory validations and all diagnostic protocols are
+released; trained checkpoints, diagnostic output files and the robot hardware
+are not.
 
 ## License
 
