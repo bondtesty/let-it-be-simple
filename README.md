@@ -1,27 +1,111 @@
-# Let It Be Simple: One-Step Action Generation for Vision-Language-Action Models
+# Let It Be Simple
 
-Official code release for [arXiv:2606.05737](https://arxiv.org/abs/2606.05737).
+One-step action generation for vision-language-action (VLA) models.
 
-Generating diverse images from sparse text is hard; generating compact actions
-from rich observations is easier. From a condition–target view, VLA policies
-align with *image-to-text*, not *text-to-image*. This alignment has a concrete
-consequence: with a **high-noise-shifted training-time distribution**, a flow
-VLA policy can decode **one single step** and still act — 95.6% on LIBERO-Long
-with a single-step policy, competitive on LIBERO-Plus, LIBERO-Pro, and real
-robots — while ablations that weaken the condition or stretch the horizon
-predictably erase the one-step gain.
+[![arXiv](https://img.shields.io/badge/arXiv%20paper-2606.05737-b31b1b.svg)](https://arxiv.org/abs/2606.05737)&nbsp;
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-This repository is **self-contained**: the
-[openpi](https://github.com/Physical-Intelligence/openpi) codebase (pinned at
-commit `981483d`) is vendored directly into the tree, and the method of the
-paper is implemented in that source — there is no separate openpi checkout to
-clone and no patch to apply. Alongside the VLA code you get the exact paper
-run configs, the toy / MNIST validations of the theory, the diagnostic
-protocols (velocity-MSE profiles, endpoint Jacobians, latency), and the LIBERO
-evaluation harness.
+Official code release for
+[Let It Be Simple: One-Step Action Generation for Vision-Language-Action Models](https://arxiv.org/abs/2606.05737).
 
-> Start with **[REPRODUCTION_MAP.md](REPRODUCTION_MAP.md)** — every paper
-> claim mapped to the code that produces it, with current release status.
+One-step sampling from a standard Flow-Matching model usually needs
+distillation or a bespoke objective — unless the target is an action. Biasing
+*only the training timestep distribution* toward the noise endpoint already
+yields strong one-step policies, and across open-source VLA architectures a
+single forward pass is often comparable to the original multi-step decoding.
+The reason is structural: rich observations strongly constrain a comparatively
+compact target, so VLA action generation sits closer to *image-to-text* than to
+*text-to-image*, and the irreducible velocity loss `R_v(t, c)` collapses toward
+the noise endpoint instead of forming the U-shape seen in image generation.
+
+The repo is **self-contained**: the [openpi](https://github.com/Physical-Intelligence/openpi)
+codebase (pinned at `981483d`) is vendored into the tree with the method
+implemented directly in that source — no second checkout, no patch to apply.
+You also get the exact paper run configs, the toy / MNIST validations of the
+theory, the diagnostic and analysis protocols, and the LIBERO evaluation
+harness.
+
+> Start with **[REPRODUCTION_MAP.md](REPRODUCTION_MAP.md)**: every paper claim
+> mapped to the code that produces it, with release status.
+
+```bibtex
+@article{chen2026letitbesimple,
+  title  = {Let It Be Simple: One-Step Action Generation for Vision-Language-Action Models},
+  author = {Chen, Yitong and Zhang, Shiduo and Gong, Jingjing and Qiu, Xipeng},
+  journal= {arXiv preprint arXiv:2606.05737},
+  year   = {2026}
+}
+```
+
+## TL;DR
+
+- **Shift the schedule, not the objective.** Remapping training timesteps
+  `t' = α·t / (1 + (α−1)·t)` under OpenPI's `t ~ Beta(1.5, 1)` produces policies
+  that act from one vector-field evaluation at `x_t = x_0 = ε` — no
+  distillation, no new head, no extra inference cost.
+- **It generalises across architectures.** Pairwise decoding of public VLA
+  checkpoints, one step vs many, is comparable on LIBERO, CALVIN and SimplerEnv.
+- **The geometry says why.** Endpoint Jacobians of the learned generative map
+  have a much smaller largest singular value for action generation than for
+  image generation, and ablations that weaken the condition or stretch the
+  horizon predictably erase the one-step gain.
+
+## Results
+
+Full-encoder policy (`α = 3`), LIBERO success rate %, 500 episodes / suite;
+differences are relative to 10-step Euler integration of the same checkpoint
+(paper Table 2):
+
+| Steps  | Spatial      | Object       | Goal         | Long         |
+|--------|--------------|--------------|--------------|--------------|
+| 1-step | 98.4 (−0.4)  | 100.0 (+1.0) | 97.0 (−1.0)  | 95.6 (+0.6)  |
+| 10-step| 98.8         | 99.0         | 98.0         | 95.0         |
+
+The schedule sweep (paper Table 1) shows the other side of the same coin: at
+strong shift the *same* checkpoint degenerates badly under 10-step integration
+while one step stays strong. LIBERO-Plus, LIBERO-Pro, real-robot tasks and the
+official-checkpoint study are in the paper; the released code reproduces all of
+those protocols.
+
+## Updates
+
+- **[Oct 2026]** Repository is now self-contained: openpi vendored with the
+  method in-tree (`patches/` removed), the local-geometry analysis helpers
+  vendored under `experiments/pi0-endpoint-geometry/`, and the config set
+  pruned to the 25 runs the paper actually reports.
+- **[Jun 2026]** Paper released on arXiv ([2606.05737](https://arxiv.org/abs/2606.05737)).
+
+## Requirements
+
+Developed on Ubuntu 22.04 with NVIDIA GPUs; Python and all dependencies are
+managed with [uv](https://docs.astral.sh/uv/). The released configs span a
+*tiny* variant (4 SigLIP layers, 4-layer × 768 action head) up to the full
+encoder (27 SigLIP layers, Gemma-2B backbone) — treat per-GPU memory and wall
+clock as openpi's own numbers for the corresponding model size, since we do not
+publish measured VRAM tables for these runs.
+
+## Setup
+
+```bash
+git clone https://github.com/bondtesty/let-it-be-simple.git
+cd let-it-be-simple
+uv sync
+```
+
+That is the whole setup: `uv sync` installs the vendored `openpi` package and
+its dependency set from `uv.lock`.
+
+External artifacts you must obtain yourself (each governed by its own license,
+none shipped here):
+
+- **Gemma / PaliGemma weights** — required to train or evaluate any policy.
+  Subject to the separate terms in `LICENSE_GEMMA.txt`; follow the upstream
+  openpi instructions to download them. The converted V-JEPA 2.1 weights
+  referenced by some configs resolve through `LBS_CKPT_ROOT`.
+- **LIBERO benchmark assets** — needed only for `eval/`; point
+  `LIBERO_CLIENT_LIBERO_PATH` (and the docker build context under
+  `eval/libero_rollout/`) at your own LIBERO checkout.
+- **LeRobot datasets / checkpoints** — resolved through the `LBS_*` variables.
 
 ## Repository layout
 
@@ -46,30 +130,6 @@ figures/          scripts that render the paper figures from diagnostic output
 
 See `NOTICE` for the exact provenance of the vendored code and the list of
 modified files (Apache-2.0 section 4.3).
-
-## Setup
-
-```bash
-git clone https://github.com/bondtesty/let-it-be-simple.git
-cd let-it-be-simple
-uv sync
-```
-
-That is the whole setup: `uv sync` installs the vendored `openpi` package and
-all of its dependencies from `uv.lock`.
-
-External artifacts you still need to obtain yourself (all governed by their
-own licenses, none of them shipped here):
-
-- **Gemma / PaliGemma weights** — required to train or evaluate any policy.
-  Subject to the separate terms in `LICENSE_GEMMA.txt`; download separately
-  per the upstream instructions in `docs` of the openpi repo. The converted
-  V-JEPA 2.1 weights referenced by the paper configs are resolved through
-  `LBS_CKPT_ROOT` (below).
-- **LIBERO benchmark assets** — needed only for `eval/`; point
-  `LIBERO_CLIENT_LIBERO_PATH` (and the docker build context under
-  `eval/libero_rollout/`) at your own LIBERO checkout.
-- **LeRobot datasets / checkpoints** — resolved through `LBS_*` variables.
 
 ## The method (what changed in the source)
 
@@ -125,8 +185,10 @@ environment setup.
 Every figure number in the paper is recomputable from `diagnostics/` outputs
 using `figures/render_*.py`. Protocols (matched-noise anchors, 25 paper times,
 7-dim action slicing, Jacobian estimators) are documented in the paper
-appendices and mirrored in the script docstrings. The diagnostic CSVs backing
-the current figure set are not yet released (see REPRODUCTION_MAP.md).
+appendices and mirrored in the script docstrings. The local-geometry analysis
+helpers ship in `experiments/pi0-endpoint-geometry/`; the diagnostic CSVs and
+result JSONs backing the current figure set are not yet released (see
+REPRODUCTION_MAP.md).
 
 ## Checkpoints
 
@@ -149,6 +211,16 @@ Scripts are published as a reproducibility archive and have not been
 individually verified to run in external environments; set the paths above to
 match your own storage layout.
 
+## Reproduction status
+
+`REPRODUCTION_MAP.md` carries the per-claim status with this legend: **✅** code
+and protocol released, **⚠️** released but needs an external artifact or
+third-party environment, **⛔** not in this release. Currently ⛔: trained
+checkpoints, the diagnostic CSV / result JSON artifacts, real-robot hardware,
+and the `α = 8` rows of Tables 1/13/14/15 — no config with `noise_shift_alpha=8`
+exists in the released set, so those cells cannot be reproduced from this repo
+as published.
+
 ## License
 
 - `src/`, `packages/`, `scripts/`, `examples/libero/`, `pyproject.toml`,
@@ -159,14 +231,3 @@ match your own storage layout.
   downloaded separately.
 - The paper-specific additions (`src/openpi/training/misc/paper_configs.py`,
   `experiments/`, `diagnostics/`, `eval/`, `figures/`): Apache-2.0.
-
-## Citation
-
-```bibtex
-@article{chen2026letitbesimple,
-  title  = {Let It Be Simple: One-Step Action Generation for Vision-Language-Action Models},
-  author = {Chen, Yitong and others},
-  journal= {arXiv preprint arXiv:2606.05737},
-  year   = {2026}
-}
-```
