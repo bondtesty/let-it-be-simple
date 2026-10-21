@@ -3,7 +3,7 @@
 embedded suptitle/subplot titles, matching the paper_figures camera-ready style.
 
 Data source: metadata JSON dumped by openpi/scripts/plot_rss_vloss.py
-(remote /data/rss-competition path is not available locally, but the JSON
+(the remote RSS-competition cluster path is not available locally, but the JSON
 contains the full processed per-time-bin data).
 """
 
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from pathlib import Path
 
 import matplotlib
@@ -21,9 +22,8 @@ from matplotlib.ticker import FixedLocator, FuncFormatter
 
 REPO = Path(__file__).resolve().parents[1]
 OUT = REPO / "figures" / "rss_real_robot_vloss_diagnostics"
-DATA_JSON = Path(
-    "/home/ubuntu/Coding/openpi/analysis_results/paper_figures_20260918/external_vloss_pi05_rss.json"
-)
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
+DATA_JSON = RESULTS_ROOT / "paper_figures_20260918/external_vloss_pi05_rss.json"
 
 
 def log_ticks(y_min: float, y_max: float) -> list[float]:

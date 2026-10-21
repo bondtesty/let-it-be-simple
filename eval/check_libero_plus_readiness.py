@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 
@@ -36,7 +37,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--root",
-        default="/inspire/hdd/global_user/gongjingjing-25039/ytchen/data/libero_plus_lerobot",
+        default=os.environ.get("LBS_LIBERO_PLUS_ROOT", "/path/to/libero-plus"),
     )
     parser.add_argument("--repo-id", default="Sylvest/libero_plus_lerobot")
     parser.add_argument("--action-horizon", type=int, default=10)

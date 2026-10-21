@@ -3,10 +3,16 @@
 Each TrainConfig below corresponds to a run reported in the paper; see REPRODUCTION_MAP.md.
 """
 
+import os
+
 import openpi.models.pi0_config as pi0_config
 import openpi.training.optimizer as _optimizer
 import openpi.training.weight_loaders as weight_loaders
 import openpi.transforms as _transforms
+
+# Root directory that holds the converted V-JEPA 2.1 checkpoints referenced
+# below; override with the LBS_CKPT_ROOT environment variable.
+LBS_CKPT_ROOT = os.environ.get("LBS_CKPT_ROOT", "/path/to/checkpoints")
 
 
 def get_paper_configs():
@@ -753,7 +759,7 @@ def get_paper_configs():
             ),
             # Load converted V-JEPA 2.1 ViT-L checkpoint (PyTorch -> JAX converted)
             weight_loader=weight_loaders.VJEPAWeightLoader(
-                checkpoint_path="/inspire/hdd/global_user/gongjingjing-25039/ytchen/data/vjepa2/vjepa2_1_vitl_jax.pkl",
+                checkpoint_path=f"{LBS_CKPT_ROOT}/data/vjepa2/vjepa2_1_vitl_jax.pkl",
             ),
         ),
         TrainConfig(
@@ -790,7 +796,7 @@ def get_paper_configs():
                 frame_history_steps=4,
             ),
             weight_loader=weight_loaders.VJEPAWeightLoader(
-                checkpoint_path="/inspire/hdd/global_user/gongjingjing-25039/ytchen/data/vjepa2/vjepa2_1_vitl_jax.pkl",
+                checkpoint_path=f"{LBS_CKPT_ROOT}/data/vjepa2/vjepa2_1_vitl_jax.pkl",
             ),
             num_workers=24,
         ),
@@ -828,7 +834,7 @@ def get_paper_configs():
                 frame_history_steps=4,
             ),
             weight_loader=weight_loaders.VJEPAWeightLoader(
-                checkpoint_path="/inspire/hdd/global_user/gongjingjing-25039/ytchen/data/vjepa2/vjepa2_1_vitl_jax.pkl",
+                checkpoint_path=f"{LBS_CKPT_ROOT}/data/vjepa2/vjepa2_1_vitl_jax.pkl",
             ),
             num_workers=32,
         ),
@@ -1006,7 +1012,7 @@ def get_paper_configs():
                 frame_history_steps=4,
             ),
             weight_loader=weight_loaders.VJEPAWeightLoader(
-                checkpoint_path="/inspire/hdd/global_user/gongjingjing-25039/ytchen/data/vjepa2/vjepa2_1_vitl_jax.pkl",
+                checkpoint_path=f"{LBS_CKPT_ROOT}/data/vjepa2/vjepa2_1_vitl_jax.pkl",
             ),
         ),
         TrainConfig(
@@ -1039,7 +1045,7 @@ def get_paper_configs():
                 frame_history_steps=4,
             ),
             weight_loader=weight_loaders.VJEPAWeightLoader(
-                checkpoint_path="/inspire/hdd/global_user/gongjingjing-25039/ytchen/data/vjepa2/vjepa2_1_vitl_jax.pkl",
+                checkpoint_path=f"{LBS_CKPT_ROOT}/data/vjepa2/vjepa2_1_vitl_jax.pkl",
             ),
         ),
         TrainConfig(

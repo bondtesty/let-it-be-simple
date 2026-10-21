@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -17,14 +18,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-RESULTS = Path(
-    "/data/alphaxiv/worktrees/issue-4-meanflow-probe/experiments/"
-    "pi0-endpoint-geometry/results"
-)
-GRIPPER_JSON = Path(
-    "/home/ubuntu/Coding/openpi/analysis_results/paper_figures_20260918/"
-    "05_trajectory_and_geometry/libero_ep18_gripper_trace.json"
-)
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
+RESULTS = RESULTS_ROOT / "pi0-endpoint-geometry/results"
+GRIPPER_JSON = RESULTS_ROOT / "paper_figures_20260918/05_trajectory_and_geometry/libero_ep18_gripper_trace.json"
 REPO = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO / "figures"
 FLIPS = [11, 34, 54, 65]

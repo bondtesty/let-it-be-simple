@@ -10,6 +10,7 @@ the camera-ready style.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import matplotlib
@@ -18,9 +19,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FixedFormatter, FixedLocator
 
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
 REPO = Path(__file__).resolve().parents[1]
 OUT = REPO / "figures" / "solver-step-convergence-audit"
-SOLVER_DIR = Path("/home/ubuntu/Coding/openpi/analysis_results/paper_raw_results_20260918/solver")
+SOLVER_DIR = RESULTS_ROOT / "paper_raw_results_20260918/solver"
 
 PANELS = {
     "ours": [

@@ -6,12 +6,13 @@ gripper-channel peak h* of the one-step map's leading output direction u_1
 vs the recorded gripper transition step; the pure-noise control (screened at
 its own anchors) peaks systematically early.
 
-Data: alphaxiv pi0-endpoint-geometry result JSONs (read-only).
+Data: pi0-endpoint-geometry result JSONs (read-only; under LBS_RESULTS_ROOT).
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -21,7 +22,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-ROOT = Path("/data/alphaxiv/worktrees/issue-4-meanflow-probe/experiments/pi0-endpoint-geometry/results")
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
+ROOT = RESULTS_ROOT / "pi0-endpoint-geometry/results"
 REPO = Path(__file__).resolve().parents[1]
 
 C_1STEP = "#e67e22"  # deployed one-step map

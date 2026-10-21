@@ -1,5 +1,5 @@
 #!/bin/bash
-# LIBERO evaluation script for headless GPU nodes (Inspire cluster).
+# LIBERO evaluation script for headless GPU nodes.
 # Usage: bash scripts/eval_libero.sh <config_name> <checkpoint_dir> [task_suite]
 #
 # Example:

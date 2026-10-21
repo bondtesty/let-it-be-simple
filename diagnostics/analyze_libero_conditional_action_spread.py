@@ -69,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dataset-root",
         type=Path,
-        default=Path("/home/ubuntu/.cache/huggingface/lerobot/physical-intelligence/libero"),
+        default=Path.home() / ".cache" / "huggingface" / "lerobot" / "physical-intelligence" / "libero",
     )
     parser.add_argument("--output-dir", type=Path, default=Path("analysis_results/libero_conditional_spread"))
     parser.add_argument("--horizon", type=int, default=10)

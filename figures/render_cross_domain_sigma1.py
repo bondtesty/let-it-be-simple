@@ -12,13 +12,15 @@ curve labels ~8.3pt, ticks ~8.6pt). Curves are labeled directly on the plot
 (no legend box): the four LIBERO horizons are anchored by H=10 / H=40 with
 the light-to-dark colormap conveying H=20/H=30 in between.
 
-Data: openpi analysis_results/paper_figures_20260918/cross_domain_sigma1_histograms.json
-(read-only; produced by scripts/plot_paper_figures_20260918.py::plot_cross_domain_geometry).
+Data: analysis_results/paper_figures_20260918/cross_domain_sigma1_histograms.json
+(read-only; under LBS_RESULTS_ROOT; produced by
+scripts/plot_paper_figures_20260918.py::plot_cross_domain_geometry).
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -31,10 +33,8 @@ from matplotlib.colors import LinearSegmentedColormap
 
 REPO = Path(__file__).resolve().parents[1]
 OUT = REPO / "figures" / "cross_domain_sigma1_histograms"
-SOURCE = Path(
-    "/home/ubuntu/Coding/openpi/analysis_results/paper_figures_20260918/"
-    "cross_domain_sigma1_histograms.json"
-)
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
+SOURCE = RESULTS_ROOT / "paper_figures_20260918/cross_domain_sigma1_histograms.json"
 
 HORIZONS = [10, 20, 30, 40]
 IMAGE_STYLE = {

@@ -7,13 +7,14 @@ controls). Weakening the image or wrist channel shifts mass toward larger
 sigma_1 (less contractive transport), complementing the success-rate drop
 with a geometric signature.
 
-Data: alphaxiv pi0-endpoint-geometry complete-map condition JSONs.
+Data: pi0-endpoint-geometry complete-map condition JSONs (under LBS_RESULTS_ROOT).
 Camera-ready: no embedded title.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -24,7 +25,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import gaussian_kde
 
-ROOT = Path("/data/alphaxiv/worktrees/issue-4-meanflow-probe/experiments/pi0-endpoint-geometry/results")
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
+ROOT = RESULTS_ROOT / "pi0-endpoint-geometry/results"
 REPO = Path(__file__).resolve().parents[1]
 OUT = REPO / "figures" / "app-condition-sigma1"
 

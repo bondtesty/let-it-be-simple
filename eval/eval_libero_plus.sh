@@ -9,7 +9,7 @@ set -euo pipefail
 
 OPENPI_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-LIBERO_PLUS_REPO="${LIBERO_PLUS_REPO:-/inspire/hdd/global_user/gongjingjing-25039/ytchen/third_party/LIBERO-plus}"
+LIBERO_PLUS_REPO="${LBS_LIBERO_PLUS_ROOT:-/path/to/libero-plus}"
 LIBERO_CLIENT_VENV_DIR="${LIBERO_CLIENT_VENV_DIR:-$OPENPI_ROOT/examples/libero_plus/.venv}"
 LIBERO_CONFIG_PATH="${LIBERO_CONFIG_PATH:-$OPENPI_ROOT/.libero_plus_config}"
 LIBERO_CLIENT_MAIN="${LIBERO_CLIENT_MAIN:-$OPENPI_ROOT/examples/libero/main.py}"

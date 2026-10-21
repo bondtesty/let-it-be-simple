@@ -115,6 +115,24 @@ the current figure set are not yet released (see REPRODUCTION_MAP.md).
 
 Trained checkpoints are not included yet. Release plan TBD.
 
+## Environment variables
+
+All host-specific paths in this repo resolve through the variables below; no
+default points at any specific machine, account, or storage layout. Relative
+defaults (`results`) are resolved against the repository root, so every script
+remains importable/`--help`-able on a fresh clone.
+
+| Variable | Meaning | Default | When you must set it |
+|---|---|---|---|
+| `LBS_CKPT_ROOT` | Root of the checkpoint tree: trained openpi policy checkpoints and the converted V-JEPA 2.1 weights referenced by `configs/paper_configs.py` | `/path/to/checkpoints` | To train, evaluate, or run checkpoint-loading diagnostics |
+| `LBS_RESULTS_ROOT` | Root of the experiment-artifact tree read by `figures/render_*.py` (experiment result JSONs, diagnostic/eval CSVs, tile images) | `results` | To render figures or run diagnostics that read produced artifacts |
+| `LBS_LIBERO_PLUS_ROOT` | Location of the LIBERO-Plus checkout / LeRobot snapshot used by the LIBERO-Plus readiness check and eval wrapper | `/path/to/libero-plus` | For anything LIBERO-Plus |
+| `LBS_OPENPI_ROOT` | Checkout whose `experiments/pi0-endpoint-geometry/` directory contains the canonical helper modules imported by `diagnostics/pi0_local_geometry_libero.py` | this repo's root | Only for that diagnostic; the script errors out with instructions if the modules are not found |
+
+Scripts are published as a reproducibility archive and have not been
+individually verified to run in external environments; set the paths above to
+match your own storage layout.
+
 ## License
 
 Apache-2.0 (same as openpi, on which this code is based;

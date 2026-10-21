@@ -7,13 +7,15 @@ Polished layout:
 """
 
 import csv
+import os
 from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 
-CSV_PATH = Path("/home/ubuntu/Coding/overleaf-corl-paper/draft/rss-workshop-writing-20260624/figure1_profiles.csv")
-OUT_DIR = Path("/home/ubuntu/Coding/ICLR-2027-Let-it-be-simple/figures")
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
+CSV_PATH = RESULTS_ROOT / "rss-workshop-writing-20260624/figure1_profiles.csv"
+OUT_DIR = Path(__file__).resolve().parents[1] / "figures"
 
 COLOR_ORACLE = "#0072B2"  # Deep blue
 COLOR_TRAINED = "#D55E00"  # Vermillion / amber

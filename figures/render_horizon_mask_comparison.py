@@ -11,6 +11,7 @@ from the current CSV; H20-H40 mask7 checkpoints are not available locally.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import matplotlib
@@ -20,10 +21,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.lines import Line2D
 
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
 OLD_CSV = Path("/tmp/old_horizon_vloss.csv")
-CURRENT_CSV = Path("/home/ubuntu/Coding/openpi/analysis_results/libero_horizon_velocity_field_canonical_h10_h40_20260918.csv")
-MASK_CSV = Path("/home/ubuntu/Coding/openpi/logs/diagnostics/libero_velocity_field_mask7_h20_h40/libero_velocity_field_20260923_174235.csv")
-REPO_FIGURES = Path("/home/ubuntu/Coding/ICLR-2027-Let-it-be-simple/figures")
+CURRENT_CSV = RESULTS_ROOT / "libero_horizon_velocity_field_canonical_h10_h40_20260918.csv"
+MASK_CSV = RESULTS_ROOT / "libero_velocity_field_mask7_h20_h40/libero_velocity_field_20260923_174235.csv"
+REPO_FIGURES = Path(__file__).resolve().parents[1] / "figures"
 
 H_COLORS = {10: "#deebf7", 20: "#9ecae1", 30: "#4292c6", 40: "#08306b"}
 HORIZONS = [10, 20, 30, 40]

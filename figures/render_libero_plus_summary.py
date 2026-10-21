@@ -10,6 +10,7 @@ plotted at the Pure position.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import matplotlib
@@ -18,9 +19,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
 REPO = Path(__file__).resolve().parents[1]
 OUT = REPO / "figures" / "libero-plus-full-condition-sweep"
-TRENDS = Path("/home/ubuntu/Coding/openpi/analysis_results/libero_plus_eval_trends")
+TRENDS = RESULTS_ROOT / "libero_plus_eval_trends"
 
 HORIZON_STYLE = {
     10: ("#2166ac", "H10"),

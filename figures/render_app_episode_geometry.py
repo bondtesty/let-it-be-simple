@@ -7,7 +7,7 @@
     under uniform / pure-noise / alpha=4 training, (b) zero-mean relative
     sensitivity traces.
 
-Data: alphaxiv pi0-endpoint-geometry result JSONs (read-only). The episode
+Data: pi0-endpoint-geometry result JSONs (read-only; under LBS_RESULTS_ROOT). The episode
 records store log sigma_1 in natural-log units; both panels are converted to
 log10 for consistency with the rest of the paper.
 Camera-ready: no embedded panel titles, small (a)(b) corner tags.
@@ -16,6 +16,7 @@ Camera-ready: no embedded panel titles, small (a)(b) corner tags.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -25,7 +26,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-ROOT = Path("/data/alphaxiv/worktrees/issue-4-meanflow-probe/experiments/pi0-endpoint-geometry/results")
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
+ROOT = RESULTS_ROOT / "pi0-endpoint-geometry/results"
 REPO = Path(__file__).resolve().parents[1]
 
 FLIPS = [11, 34, 54, 65]

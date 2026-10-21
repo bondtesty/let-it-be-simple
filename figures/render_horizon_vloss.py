@@ -9,6 +9,7 @@ avoid the clean-data-end spike.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import matplotlib
@@ -17,10 +18,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
 REPO = Path(__file__).resolve().parents[1]
 OUT = REPO / "figures" / "libero-horizon-encoder-vloss"
-HORIZON_CSV = Path("/home/ubuntu/Coding/openpi/analysis_results/libero_horizon_velocity_field_canonical_h10_h40_20260918.csv")
-ENCODER_CSV = Path("/home/ubuntu/Coding/openpi/analysis_results/paper_raw_results_20260918/vloss/libero_encoder_vloss_h10_alpha3_alpha4_20260918.csv")
+HORIZON_CSV = RESULTS_ROOT / "libero_horizon_velocity_field_canonical_h10_h40_20260918.csv"
+ENCODER_CSV = RESULTS_ROOT / "paper_raw_results_20260918/vloss/libero_encoder_vloss_h10_alpha3_alpha4_20260918.csv"
 
 H_COLORS = {10: "#c6dbef", 20: "#6baed6", 30: "#2171b5", 40: "#08306b"}
 T_MAX = 0.9

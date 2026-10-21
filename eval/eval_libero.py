@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Python CLI for LIBERO evaluation on Inspire GPU nodes.
+Python CLI for LIBERO evaluation on headless GPU nodes.
 
 Usage:
     .venv/bin/python scripts/eval_libero.py \

@@ -8,14 +8,16 @@ panel_c: decoded commit step m(a) at b=0 (fp32 decode lattice)
 panel_d: sigma1 heatmap over the (v1, v2) noise plane with the orbit
 
 Style matches the main-text figure conventions (render_action_local_geometry_1x4.py).
-Data are produced by the issue-4-meanflow-probe worktree
+Data are produced by the pi0-endpoint-geometry experiment suite
 (pi0_local_geometry_libero_{patch,orbit_dec,declat}.json, fp32 / highest matmul
-precision, ckpt pi0_libero_simvla_tiny_siglip4_head4_w768_50k_h20_uniform @50k).
+precision, ckpt pi0_libero_simvla_tiny_siglip4_head4_w768_50k_h20_uniform @50k;
+under LBS_RESULTS_ROOT).
 """
 
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import matplotlib
@@ -25,10 +27,8 @@ import matplotlib.lines as mlines
 import matplotlib.pyplot as plt
 import numpy as np
 
-RESULTS = Path(
-    "/data/alphaxiv/worktrees/issue-4-meanflow-probe/experiments/"
-    "pi0-endpoint-geometry/results"
-)
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
+RESULTS = RESULTS_ROOT / "pi0-endpoint-geometry/results"
 REPO = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO / "figures"
 

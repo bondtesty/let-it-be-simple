@@ -8,8 +8,10 @@ content-independent; token counts and shapes match the deployed LIBERO eval path
 Example:
     uv run python scripts/profile_libero_decoding_latency.py \
         --config-name pi0_libero_simvla_tiny_siglip4_head4_w768_50k_h10_a4 \
-        --checkpoint-dir /data/cache/openpi_checkpoints/pi0_libero_simvla_tiny_siglip4_head4_w768_50k_h10_a4/h10_a4_50k/49999 \
+        --checkpoint-dir /path/to/checkpoints/pi0_libero_simvla_tiny_siglip4_head4_w768_50k_h10_a4/h10_a4_50k/49999 \
         --output analysis_results/latency/tiny_h10_a4_decode_latency_b1.json
+
+(checkpoint root is LBS_CKPT_ROOT elsewhere; this script takes it explicitly)
 """
 
 import argparse

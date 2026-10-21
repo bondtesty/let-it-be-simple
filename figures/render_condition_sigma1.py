@@ -7,13 +7,14 @@ removing the image or wrist camera shifts mass toward/past sigma_1 = 1
 (genuinely wider learned conditional), while removing the prompt or the state
 leaves the geometry essentially unchanged.
 
-Data: alphaxiv pi0-endpoint-geometry pi0_completemap_condition_alpha4_*.json
-(1088 records per cell, key log_sigma1).
+Data: pi0-endpoint-geometry pi0_completemap_condition_alpha4_*.json
+(1088 records per cell, key log_sigma1; under LBS_RESULTS_ROOT).
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -24,10 +25,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import gaussian_kde
 
-RESULTS = Path(
-    "/data/alphaxiv/worktrees/issue-4-meanflow-probe/experiments/"
-    "pi0-endpoint-geometry/results"
-)
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
+RESULTS = RESULTS_ROOT / "pi0-endpoint-geometry/results"
 REPO = Path(__file__).resolve().parents[1]
 OUT = REPO / "figures" / "condition-sigma1"
 

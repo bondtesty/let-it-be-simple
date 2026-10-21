@@ -10,6 +10,7 @@ early-time minimum and the schedule/horizon separation.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import matplotlib
@@ -19,10 +20,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.lines import Line2D
 
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
 REPO = Path(__file__).resolve().parents[1]
 OUT = REPO / "figures" / "libero-horizon-vloss-main"
-CANONICAL_CSV = Path("/home/ubuntu/Coding/openpi/analysis_results/libero_horizon_velocity_field_canonical_h10_h40_20260918.csv")
-NOMASK_H10_CSV = Path("/home/ubuntu/Coding/openpi/analysis_results/libero_horizon_velocity_field_nomask_h10_dense_20260923.csv")
+CANONICAL_CSV = RESULTS_ROOT / "libero_horizon_velocity_field_canonical_h10_h40_20260918.csv"
+NOMASK_H10_CSV = RESULTS_ROOT / "libero_horizon_velocity_field_nomask_h10_dense_20260923.csv"
 
 H_COLORS = {10: "#deebf7", 20: "#c6dbef", 30: "#6baed6", 40: "#2171b5"}
 HORIZONS = [10, 20, 30, 40]

@@ -8,6 +8,7 @@ transition analyzed by the heatmap/orbit panels.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import matplotlib
@@ -15,10 +16,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-RESULTS = Path(
-    "/data/alphaxiv/worktrees/issue-4-meanflow-probe/experiments/"
-    "pi0-endpoint-geometry/results"
-)
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
+RESULTS = RESULTS_ROOT / "pi0-endpoint-geometry/results"
 REPO = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO / "figures"
 EPISODE = 18

@@ -20,12 +20,17 @@ estimator as the dense sheet. One-step sigma1: exact JVP Jacobian SVD.
 Output: results/pi0_local_geometry_libero_2x2.{json,png}
 
 Run with the openpi venv:
-    cd /home/ubuntu/Coding/openpi && HF_HOME=/data/cache/huggingface \
+    cd /path/to/openpi && HF_HOME=/path/to/huggingface-cache \
         XLA_PYTHON_CLIENT_PREALLOCATE=false .venv/bin/python \
-        /data/alphaxiv/worktrees/issue-4-meanflow-probe/experiments/pi0-endpoint-geometry/pi0_local_geometry_libero.py
+        /path/to/let-it-be-simple/diagnostics/pi0_local_geometry_libero.py
+
+Canonical pi0-endpoint-geometry helper modules are resolved from
+LBS_OPENPI_ROOT (default: this repo's root); checkpoints from LBS_CKPT_ROOT.
+See README "Environment variables".
 """
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -34,21 +39,29 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-HERE = Path(__file__).parent
-sys.path.insert(0, "/data/alphaxiv/worktrees/issue-4-meanflow-probe/experiments/pi0-endpoint-geometry")  # canonical modules in daily-exps worktree
+HERE = Path(__file__).resolve()
+_OPENPI_ROOT = Path(os.environ.get("LBS_OPENPI_ROOT", str(HERE.parents[1])))
+sys.path.insert(0, str(_OPENPI_ROOT / "experiments" / "pi0-endpoint-geometry"))
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from pi0_completemap_liber_v2 import make_rollout  # noqa: E402
-from pi0_dense_sheet_track import make_matrixfree_ops  # noqa: E402
-from pi0_endpoint_sigma1 import frame_to_raw_obs, log  # noqa: E402
-from pi0_episode_sigma1 import REAL_DIM, make_jvp_fn, prefix_embed  # noqa: E402
-from pi0_pop_recode3 import THR, decode  # noqa: E402
-from pi0_purenoise_h20_fig8_control import CFG as PN_CFG  # noqa: E402
-from pi0_purenoise_h20_fig8_control import EXP as PN_EXP  # noqa: E402
-from pi0_tscan_sigma1 import norm_action_chunk  # noqa: E402
+try:
+    from pi0_completemap_liber_v2 import make_rollout  # noqa: E402
+    from pi0_dense_sheet_track import make_matrixfree_ops  # noqa: E402
+    from pi0_endpoint_sigma1 import frame_to_raw_obs, log  # noqa: E402
+    from pi0_episode_sigma1 import REAL_DIM, make_jvp_fn, prefix_embed  # noqa: E402
+    from pi0_pop_recode3 import THR, decode  # noqa: E402
+    from pi0_purenoise_h20_fig8_control import CFG as PN_CFG  # noqa: E402
+    from pi0_purenoise_h20_fig8_control import EXP as PN_EXP  # noqa: E402
+    from pi0_tscan_sigma1 import norm_action_chunk  # noqa: E402
+except ImportError as exc:
+    raise SystemExit(
+        f"cannot import canonical pi0-endpoint-geometry modules ({exc}); "
+        "set LBS_OPENPI_ROOT to a checkout whose experiments/pi0-endpoint-geometry "
+        "directory contains them (see README 'Environment variables')"
+    )
 
 from openpi.models import model as _model  # noqa: E402
 from openpi.policies import policy_config  # noqa: E402
@@ -56,6 +69,8 @@ from openpi.training import config as _config  # noqa: E402
 import lerobot.common.datasets.lerobot_dataset as lerobot_dataset  # noqa: E402
 
 RESULTS_DIR = HERE / "results"
+# Root of the trained-policy checkpoint tree (LBS_CKPT_ROOT; see README).
+LBS_CKPT_ROOT = os.environ.get("LBS_CKPT_ROOT", "/path/to/checkpoints")
 HORIZON = 20
 STEP = 49999
 SEED = 0
@@ -75,7 +90,7 @@ CELLS = {
 
 
 def load_cell(cfg_name, exp):
-    ckpt = f"/data/cache/openpi_checkpoints/{cfg_name}/{exp}/{STEP}"
+    ckpt = f"{LBS_CKPT_ROOT}/{cfg_name}/{exp}/{STEP}"
     config = _config.get_config(cfg_name)
     policy = policy_config.create_trained_policy(config, str(ckpt))
     params = _model.restore_params(str(Path(ckpt) / "params"), dtype=jnp.float32)

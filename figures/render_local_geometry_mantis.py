@@ -16,6 +16,7 @@ Outputs:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -28,12 +29,12 @@ from matplotlib.ticker import FuncFormatter
 import numpy as np
 from PIL import Image
 
-JSON_PATH = Path(
-    "/data/alphaxiv/worktrees/issue-4-meanflow-probe/experiments/meanflow-splitting/"
-    "results/registered_circle_meanflow_2anchors_r015_n96_g17p6_seed20260828/"
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
+JSON_PATH = RESULTS_ROOT / (
+    "meanflow-splitting/results/registered_circle_meanflow_2anchors_r015_n96_g17p6_seed20260828/"
     "meanflow_multiplicity_registered_circle.json"
 )
-TILES_DIR = Path("/home/ubuntu/Coding/openpi/analysis_results/paper_figures_20260918/mantis_mult_tiles")
+TILES_DIR = RESULTS_ROOT / "paper_figures_20260918/mantis_mult_tiles"
 REPO = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO / "figures"
 OUT = OUT_DIR / "local-geometry-mantis"

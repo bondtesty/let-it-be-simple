@@ -8,8 +8,8 @@ peak h* predicts the executed flip step population-wide.
 (b) Population alignment over 32 commit events: h* vs executed flip step m,
     96.8% within +/-1 step, colored by singular gap sigma_1/sigma_2.
 
-Data: alphaxiv pi0-endpoint-geometry results (pi0_causal_vscan.json,
-pi0_pop_switch.json).
+Data: pi0-endpoint-geometry results (pi0_causal_vscan.json,
+pi0_pop_switch.json; under LBS_RESULTS_ROOT).
 Outputs:
   - figures/causal-timing-mechanism-a.pdf / .png (standalone panel for subfigure)
   - figures/causal-timing-mechanism-b.pdf / .png (standalone panel for subfigure)
@@ -19,6 +19,7 @@ Outputs:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -28,10 +29,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-RESULTS = Path(
-    "/data/alphaxiv/worktrees/issue-4-meanflow-probe/experiments/"
-    "pi0-endpoint-geometry/results"
-)
+RESULTS_ROOT = Path(os.environ.get("LBS_RESULTS_ROOT", "results"))
+RESULTS = RESULTS_ROOT / "pi0-endpoint-geometry/results"
 REPO = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO / "figures"
 
