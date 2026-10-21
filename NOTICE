@@ -80,3 +80,7 @@ developed on):
 - `experiments/`, `diagnostics/`, `eval/`, `figures/` — theory
   validations, diagnostic protocols, LIBERO evaluation harness, and
   figure rendering scripts
+- `experiments/pi0-endpoint-geometry/` — 11 analysis helper modules written for
+  this paper (endpoint/episode sigma-1 probes, dense sheet tracking,
+  commit-mechanism and causal scans). Their checkpoint roots read `LBS_CKPT_ROOT`;
+  the result JSONs they produce are not part of this release

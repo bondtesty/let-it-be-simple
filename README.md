@@ -35,6 +35,9 @@ examples/libero/  LIBERO eval client used by eval/
 experiments/      self-contained validations of the theory
   toy_8mode/        controlled 8-mode Gaussian toy
   mnist_i2t/        image-to-text MNIST flow experiment
+  pi0-endpoint-geometry/  analysis helpers (endpoint/episode sigma-1, dense
+                          sheet tracking, commit mechanism) shared by the
+                          local-geometry diagnostics and figure scripts
 diagnostics/      velocity-MSE, endpoint-Jacobian / sigma-1, local geometry,
                   condition ablations, mode-collapse probe, latency profiling
 eval/             LIBERO / LIBERO-Plus / LIBERO-Pro evaluation
@@ -138,7 +141,7 @@ remains importable/`--help`-able on a fresh clone.
 
 | Variable | Meaning | Default | When you must set it |
 |---|---|---|---|
-| `LBS_CKPT_ROOT` | Root of the checkpoint tree: trained openpi policy checkpoints and the converted V-JEPA 2.1 weights referenced by `src/openpi/training/misc/paper_configs.py` | `/path/to/checkpoints` | To train, evaluate, or run checkpoint-loading diagnostics |
+| `LBS_CKPT_ROOT` | Root of the checkpoint tree: trained openpi policy checkpoints and the converted V-JEPA 2.1 weights referenced by `src/openpi/training/misc/paper_configs.py`, plus the checkpoints loaded by the local-geometry diagnostics | `/path/to/checkpoints` | To train, evaluate, or run checkpoint-loading diagnostics |
 | `LBS_RESULTS_ROOT` | Root of the experiment-artifact tree read by `figures/render_*.py` (experiment result JSONs, diagnostic/eval CSVs, tile images) | `results` | To render figures or run diagnostics that read produced artifacts |
 | `LBS_LIBERO_PLUS_ROOT` | Location of the LIBERO-Plus checkout / LeRobot snapshot used by the LIBERO-Plus readiness check and eval wrapper | `/path/to/libero-plus` | For anything LIBERO-Plus |
 
