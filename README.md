@@ -25,9 +25,6 @@ You also get the exact paper run configs, the toy / MNIST validations of the
 theory, the diagnostic and analysis protocols, and the LIBERO evaluation
 harness.
 
-> Start with **[REPRODUCTION_MAP.md](REPRODUCTION_MAP.md)**: every paper claim
-> mapped to the code that produces it, with release status.
-
 ```bibtex
 @article{chen2026letitbesimple,
   title  = {Let It Be Simple: One-Step Action Generation for Vision-Language-Action Models},
@@ -171,8 +168,7 @@ uv run scripts/train.py pi0_libero_simvla_tiny_siglip4_head4_w768_150k \
 `src/openpi/training/misc/CONFIG_NAMES.txt` lists every released run name.
 The hyperparameters behind each paper table row (batch/steps/LR, encoder
 truncation, α, horizon) are inside
-`src/openpi/training/misc/paper_configs.py`; see REPRODUCTION_MAP.md for the
-table → artifact mapping and release status. Config names are abbreviations,
+`src/openpi/training/misc/paper_configs.py`. Config names are abbreviations,
 not a full spec — match on the parsed fields, not on the name.
 
 ## Evaluate
@@ -267,14 +263,14 @@ Scripts are published as a reproducibility archive and have not been
 individually verified to run in external environments; set the paths above to
 match your own storage layout.
 
-## Reproduction status
+## What is released## What is released
 
-`REPRODUCTION_MAP.md` maps every paper claim to the artifact that produces it,
-with ✅ / ⚠️ / ⛔ status and a short list of what is out of scope. In short: the
-method, run configs, theory validations and diagnostic protocols are released,
-and so are the two LIBERO policies behind Tables 1-2. Not released: the
-checkpoints for the remaining paper runs, the diagnostic output trees, the
-robot hardware.
+The method (in `src/openpi/`), the run configs behind the paper tables, the
+toy and MNIST validations of the theory, the diagnostic protocols, and the two
+LIBERO policies quoted in Tables 1-2. Checkpoints for the other runs, the
+diagnostic output trees and the robot hardware are not part of this release;
+the simulation backends and evaluation harnesses behind Tables 3-4 are
+upstream projects.
 
 ## License
 

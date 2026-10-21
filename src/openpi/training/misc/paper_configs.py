@@ -1,6 +1,6 @@
 """Training experiment configs for the paper runs (subset of the experiment repo).
 
-Each TrainConfig below corresponds to a run reported in the paper; see REPRODUCTION_MAP.md.
+Each TrainConfig below corresponds to a run reported in the paper.
 """
 
 import os
