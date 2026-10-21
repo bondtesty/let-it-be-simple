@@ -61,11 +61,12 @@ differences are relative to 10-step Euler integration of the same checkpoint
 | 1-step | 98.4 (−0.4)  | 100.0 (+1.0) | 97.0 (−1.0)  | 95.6 (+0.6)  |
 | 10-step| 98.8         | 99.0         | 98.0         | 95.0         |
 
-The schedule sweep (paper Table 1) shows the other side of the same coin: at
-strong shift the *same* checkpoint degenerates badly under 10-step integration
-while one step stays strong. LIBERO-Plus, LIBERO-Pro, real-robot tasks and the
-official-checkpoint study are in the paper; the released code reproduces all of
-those protocols.
+The schedule sweep (paper Table 1, differences measured against the uniform
+one-step row) is where the effect is starkest: the tiny α = 4 policy one-shots to
+96.4 / 99.6 / 96.8 / 85.2 %, while the strongly shifted checkpoints collapse
+under 10-step integration of the very same weights. LIBERO-Plus, LIBERO-Pro,
+real-robot tasks and the official-checkpoint study are in the paper; the
+released code reproduces all of those protocols.
 
 ## Updates
 
@@ -201,7 +202,35 @@ REPRODUCTION_MAP.md).
 
 ## Checkpoints
 
-Trained checkpoints are not included yet. Release plan TBD.
+Two LIBERO policies from the paper are released on the Hugging Face Hub:
+
+| Checkpoint | Variant | Params |
+|---|---|---|
+| `pi0_libero_simvla_tiny_siglip4_head4_w768_50k_h10_a4` | Tiny, H=10, α = 4 | 240.4 M |
+| `pi0_libero_simvla_k4_nop_h10_cosine_150k_bs256` | Full encoder (SigLIP 27 layers, Gemma-2B), H=10, α = 3 | 1414.3 M |
+
+One-step success rates for exactly these weights: the tiny α = 4 policy reaches
+96.4 / 99.6 / 96.8 / 85.2 % on Spatial / Object / Goal / Long (paper Table 1,
+best 1-step row, and the same policy is the subject of the condition ablations in
+Table 7); the full-encoder policy is in Table 2 above.
+
+```bash
+BASE=https://huggingface.co/glowingspirits/let-it-be-simple/resolve/main
+aria2c -x16 -s16 --file-allocation=none --dir=$HOME/models \
+    -o pi0_libero_simvla_tiny_siglip4_head4_w768_50k_h10_a4.tar.gz \
+    $BASE/pi0_libero_simvla_tiny_siglip4_head4_w768_50k_h10_a4.tar.gz
+tar xzf $HOME/models/pi0_libero_simvla_tiny_siglip4_head4_w768_50k_h10_a4.tar.gz -C $HOME/models
+export LBS_CKPT_ROOT=$HOME/models
+```
+
+Each archive holds the openpi layout (`params/` plus `assets/` with the LIBERO
+normalisation stats) for the final training step; optimiser state is not
+included. `SHA256SUMS` in the Hub repo covers both archives. The remaining
+checkpoints (LIBERO-Plus / LIBERO-Pro runs, horizon sweep, condition ablations)
+are not released yet.
+
+These weights are derived from Gemma / PaliGemma pre-trained parameters and
+therefore carry the terms in `LICENSE_GEMMA.txt` in addition to Apache-2.0.
 
 ## Environment variables
 
