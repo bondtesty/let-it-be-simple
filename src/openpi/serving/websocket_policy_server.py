@@ -1,0 +1,330 @@
+import asyncio
+import contextlib
+from dataclasses import dataclass
+import http
+import json
+import logging
+import time
+import traceback
+from urllib.parse import parse_qs
+from urllib.parse import urlparse
+
+from openpi_client import base_policy as _base_policy
+from openpi_client import msgpack_numpy
+import websockets.asyncio.server as _server
+import websockets.frames
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _BatchRequest:
+    obs: dict
+    future: asyncio.Future[dict]
+
+
+class WebsocketPolicyServer:
+    """Serves a policy using the websocket protocol. See websocket_client_policy.py for a client implementation.
+
+    Currently only implements the `load` and `infer` methods.
+    """
+
+    def __init__(
+        self,
+        policy: _base_policy.BasePolicy,
+        host: str = "0.0.0.0",
+        port: int | None = None,
+        metadata: dict | None = None,
+    ) -> None:
+        self._policy = policy
+        self._host = host
+        self._port = port
+        self._metadata = metadata or {}
+        logging.getLogger("websockets.server").setLevel(logging.INFO)
+
+    def serve_forever(self) -> None:
+        asyncio.run(self.run())
+
+    async def run(self):
+        async with _server.serve(
+            self._handler,
+            self._host,
+            self._port,
+            compression=None,
+            max_size=None,
+            process_request=_health_check,
+        ) as server:
+            await server.serve_forever()
+
+    async def _handler(self, websocket: _server.ServerConnection):
+        logger.info(f"Connection from {websocket.remote_address} opened")
+        packer = msgpack_numpy.Packer()
+
+        await websocket.send(packer.pack(self._metadata))
+
+        prev_total_time = None
+        while True:
+            try:
+                start_time = time.monotonic()
+                _data = await websocket.recv()
+                if isinstance(_data, str):
+                    _data = _data.encode()
+                obs = msgpack_numpy.unpackb(_data)
+
+                infer_time = time.monotonic()
+                n_samples = obs.pop("__n_samples__", None)
+                if n_samples is not None:
+                    try:
+                        action = self._policy.infer_multi(obs, n_samples=int(n_samples))
+                    except NotImplementedError:
+                        action = self._policy.infer(obs)
+                        # Adaptive client expects actions_std; provide zeros so it doesn't crash.
+                        import numpy as np
+
+                        action["actions_std"] = np.zeros_like(action["actions"])
+                        action["actions_all"] = action["actions"][None, ...]
+                else:
+                    action = self._policy.infer(obs)
+                infer_time = time.monotonic() - infer_time
+
+                action["server_timing"] = {
+                    "infer_ms": infer_time * 1000,
+                }
+                if prev_total_time is not None:
+                    # We can only record the last total time since we also want to include the send time.
+                    action["server_timing"]["prev_total_ms"] = prev_total_time * 1000
+
+                await websocket.send(packer.pack(action))
+                prev_total_time = time.monotonic() - start_time
+
+            except websockets.ConnectionClosed:
+                logger.info(f"Connection from {websocket.remote_address} closed")
+                break
+            except Exception:
+                logger.exception("Inference error")
+                await websocket.send(traceback.format_exc())
+                await websocket.close(
+                    code=websockets.frames.CloseCode.INTERNAL_ERROR,
+                    reason="Internal server error. Traceback included in previous frame.",
+                )
+                break
+
+
+class BatchedWebsocketPolicyServer(WebsocketPolicyServer):
+    """Websocket policy server that batches concurrent single-sample inference requests."""
+
+    def __init__(
+        self,
+        policy: _base_policy.BasePolicy,
+        host: str = "0.0.0.0",
+        port: int | None = None,
+        metadata: dict | None = None,
+        *,
+        max_batch_size: int = 8,
+        batch_timeout_ms: float = 10.0,
+        pad_to_max_batch: bool = False,
+    ) -> None:
+        super().__init__(policy=policy, host=host, port=port, metadata=metadata)
+        if max_batch_size < 1:
+            raise ValueError("max_batch_size must be >= 1")
+        self._max_batch_size = max_batch_size
+        self._batch_timeout_seconds = batch_timeout_ms / 1000.0
+        self._pad_to_max_batch = pad_to_max_batch
+        self._requests: asyncio.Queue[_BatchRequest] = asyncio.Queue()
+
+    async def run(self):
+        worker = asyncio.create_task(self._batch_worker())
+        try:
+            async with _server.serve(
+                self._handler,
+                self._host,
+                self._port,
+                compression=None,
+                max_size=None,
+                process_request=self._process_request,
+            ) as server:
+                await server.serve_forever()
+        finally:
+            worker.cancel()
+
+    def _process_request(
+        self, connection: _server.ServerConnection, request: _server.Request
+    ) -> _server.Response | None:
+        parsed = urlparse(request.path)
+        if parsed.path == "/config":
+            params = parse_qs(parsed.query)
+            try:
+                response = self._update_config(params)
+            except ValueError as exc:
+                return connection.respond(http.HTTPStatus.BAD_REQUEST, json.dumps({"error": str(exc)}) + "\n")
+            return connection.respond(http.HTTPStatus.OK, json.dumps(response, sort_keys=True) + "\n")
+        return _health_check(connection, request)
+
+    def _update_config(self, params: dict[str, list[str]]) -> dict:
+        if "max_batch_size" in params:
+            max_batch_size = int(params["max_batch_size"][-1])
+            if max_batch_size < 1:
+                raise ValueError("max_batch_size must be >= 1")
+            self._max_batch_size = max_batch_size
+        if "batch_timeout_ms" in params:
+            batch_timeout_ms = float(params["batch_timeout_ms"][-1])
+            if batch_timeout_ms < 0:
+                raise ValueError("batch_timeout_ms must be >= 0")
+            self._batch_timeout_seconds = batch_timeout_ms / 1000.0
+        if "pad_to_max_batch" in params:
+            value = params["pad_to_max_batch"][-1].lower()
+            self._pad_to_max_batch = value in ("1", "true", "yes", "on")
+        return {
+            "config": {
+                "max_batch_size": self._max_batch_size,
+                "batch_timeout_ms": self._batch_timeout_seconds * 1000.0,
+                "pad_to_max_batch": self._pad_to_max_batch,
+            }
+        }
+
+    async def _handler(self, websocket: _server.ServerConnection):
+        logger.info(f"Connection from {websocket.remote_address} opened")
+        packer = msgpack_numpy.Packer()
+
+        await websocket.send(packer.pack(self._metadata))
+
+        prev_total_time = None
+        while True:
+            try:
+                start_time = time.monotonic()
+                _data = await websocket.recv()
+                if isinstance(_data, str):
+                    _data = _data.encode()
+                obs = msgpack_numpy.unpackb(_data)
+
+                infer_start = time.monotonic()
+                action = await self._infer(obs)
+                infer_time = time.monotonic() - infer_start
+
+                action["server_timing"] = {
+                    **action.get("server_timing", {}),
+                    "infer_ms": infer_time * 1000,
+                }
+                if prev_total_time is not None:
+                    action["server_timing"]["prev_total_ms"] = prev_total_time * 1000
+
+                await websocket.send(packer.pack(action))
+                prev_total_time = time.monotonic() - start_time
+
+            except websockets.ConnectionClosed:
+                logger.info(f"Connection from {websocket.remote_address} closed")
+                break
+            except Exception:
+                logger.exception("Inference error")
+                await websocket.send(traceback.format_exc())
+                await websocket.close(
+                    code=websockets.frames.CloseCode.INTERNAL_ERROR,
+                    reason="Internal server error. Traceback included in previous frame.",
+                )
+                break
+
+    async def _infer(self, obs: dict) -> dict:
+        n_samples = obs.pop("__n_samples__", None)
+        if n_samples is not None or not hasattr(self._policy, "infer_batch"):
+            return await asyncio.to_thread(self._infer_single, obs, n_samples)
+
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        await self._requests.put(_BatchRequest(obs=obs, future=future))
+        return await future
+
+    def _infer_single(self, obs: dict, n_samples: int | None) -> dict:
+        if n_samples is None:
+            return self._policy.infer(obs)
+        try:
+            return self._policy.infer_multi(obs, n_samples=int(n_samples))
+        except NotImplementedError:
+            action = self._policy.infer(obs)
+            # Adaptive client expects actions_std; provide zeros so it doesn't crash.
+            import numpy as np
+
+            action["actions_std"] = np.zeros_like(action["actions"])
+            action["actions_all"] = action["actions"][None, ...]
+            return action
+
+    async def _batch_worker(self) -> None:
+        pending: list[_BatchRequest] = []
+        has_items = asyncio.Event()
+        batch_full = asyncio.Event()
+
+        async def collect_requests() -> None:
+            while True:
+                request = await self._requests.get()
+                pending.append(request)
+                has_items.set()
+                if len(pending) >= self._max_batch_size:
+                    batch_full.set()
+
+        collector = asyncio.create_task(collect_requests())
+        try:
+            while True:
+                while not pending:
+                    has_items.clear()
+                    await has_items.wait()
+
+                batch_start = time.monotonic()
+                if len(pending) < self._max_batch_size and self._batch_timeout_seconds > 0:
+                    with contextlib.suppress(TimeoutError):
+                        await asyncio.wait_for(batch_full.wait(), timeout=self._batch_timeout_seconds)
+                    batch_full.clear()
+
+                if not pending:
+                    continue
+
+                batch_size = min(len(pending), self._max_batch_size)
+                batch = pending[:batch_size]
+                del pending[:batch_size]
+                if pending:
+                    has_items.set()
+                    if len(pending) >= self._max_batch_size:
+                        batch_full.set()
+                else:
+                    has_items.clear()
+
+                try:
+                    queue_ms = (time.monotonic() - batch_start) * 1000
+                    batch_infer_start = time.monotonic()
+                    outputs = await asyncio.to_thread(self._run_batch, [request.obs for request in batch])
+                    batch_total_ms = (time.monotonic() - batch_start) * 1000
+                    batch_infer_ms = (time.monotonic() - batch_infer_start) * 1000
+                except Exception as exc:
+                    for request in batch:
+                        if not request.future.done():
+                            request.future.set_exception(exc)
+                else:
+                    for request, output in zip(batch, outputs, strict=True):
+                        output["server_timing"] = {
+                            **output.get("server_timing", {}),
+                            "batch_size": len(batch),
+                            "batch_queue_ms": queue_ms,
+                            "batch_wait_ms": queue_ms,
+                            "batch_infer_ms": batch_infer_ms,
+                            "batch_total_ms": batch_total_ms,
+                        }
+                        if not request.future.done():
+                            request.future.set_result(output)
+                finally:
+                    for _ in batch:
+                        self._requests.task_done()
+        finally:
+            collector.cancel()
+
+    def _run_batch(self, obs_batch: list[dict]) -> list[dict]:
+        if len(obs_batch) == 1 and not self._pad_to_max_batch:
+            return [self._policy.infer(obs_batch[0])]
+        output_size = len(obs_batch)
+        if self._pad_to_max_batch and len(obs_batch) < self._max_batch_size:
+            obs_batch = [*obs_batch, *[dict(obs_batch[-1]) for _ in range(self._max_batch_size - len(obs_batch))]]
+        return self._policy.infer_batch(obs_batch)[:output_size]  # type: ignore[attr-defined]
+
+
+def _health_check(connection: _server.ServerConnection, request: _server.Request) -> _server.Response | None:
+    if request.path == "/healthz":
+        return connection.respond(http.HTTPStatus.OK, "OK\n")
+    # Continue with the normal request handling.
+    return None

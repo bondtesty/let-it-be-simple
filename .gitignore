@@ -1,6 +1,32 @@
+# Python bytecode / caches
 __pycache__/
-*.pyc
-*.log
+*.py[cod]
+*$py.class
+
+# Virtual environments
 .venv/
+env/
+venv/
+
+# openpi runtime artifacts (data, checkpoints, logs)
+assets/
 checkpoints/
+data/
+wandb/
+results/
+logs/
+*.log
 *.npz
+
+# LIBERO eval harness artifacts
+.gl_libs/
+.libero_config/
+
+# Packaging / test / tooling noise
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/

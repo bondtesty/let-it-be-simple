@@ -11,11 +11,13 @@ with a single-step policy, competitive on LIBERO-Plus, LIBERO-Pro, and real
 robots — while ablations that weaken the condition or stretch the horizon
 predictably erase the one-step gain.
 
-This repository contains the code needed to reproduce the paper: an overlay on
-[openpi](https://github.com/Physical-Intelligence/openpi) implementing the
-noise-shifted training schedule and the SimVLA action head, the exact paper run
-configs, the toy / MNIST validations of the theory, the diagnostic protocols
-(velocity-MSE profiles, endpoint Jacobians, latency), and the LIBERO
+This repository is **self-contained**: the
+[openpi](https://github.com/Physical-Intelligence/openpi) codebase (pinned at
+commit `981483d`) is vendored directly into the tree, and the method of the
+paper is implemented in that source — there is no separate openpi checkout to
+clone and no patch to apply. Alongside the VLA code you get the exact paper
+run configs, the toy / MNIST validations of the theory, the diagnostic
+protocols (velocity-MSE profiles, endpoint Jacobians, latency), and the LIBERO
 evaluation harness.
 
 > Start with **[REPRODUCTION_MAP.md](REPRODUCTION_MAP.md)** — every paper
@@ -24,8 +26,12 @@ evaluation harness.
 ## Repository layout
 
 ```
-patches/          overlay onto openpi (the method lives here)
-configs/          the paper's LIBERO run configs (25 TrainConfigs)
+src/openpi/       vendored openpi (Apache-2.0, base commit 981483d) with the
+                  method implemented directly in the source; the paper's 25
+                  run configs live in src/openpi/training/misc/
+packages/         openpi-client workspace package
+scripts/          train.py / serve_policy.py entry points
+examples/libero/  LIBERO eval client used by eval/
 experiments/      self-contained validations of the theory
   toy_8mode/        controlled 8-mode Gaussian toy
   mnist_i2t/        image-to-text MNIST flow experiment
@@ -35,30 +41,37 @@ eval/             LIBERO / LIBERO-Plus / LIBERO-Pro evaluation
 figures/          scripts that render the paper figures from diagnostic output
 ```
 
+See `NOTICE` for the exact provenance of the vendored code and the list of
+modified files (Apache-2.0 section 4.3).
+
 ## Setup
 
-The VLA code is distributed as a **patch overlay** on the upstream openpi
-release we branched from, so this repo stays small and reviewable instead of
-shipping a whole fork.
-
 ```bash
-git clone https://github.com/Physical-Intelligence/openpi.git
-cd openpi
-git checkout 981483dca0fd9acba698fea00aa6e52d56a66c58   # base commit used in the paper
-git apply /path/to/let-it-be-simple/patches/01-model-noise-shift-simvla.patch
-git apply /path/to/let-it-be-simple/patches/02-serving.patch        # only needed for the eval server
-cp /path/to/let-it-be-simple/configs/paper_configs.py src/openpi/training/misc/
-# register the configs: add to src/openpi/training/config.py
-#   import openpi.training.misc.paper_configs as paper_configs
-#   ...and inside the _CONFIGS list:  *paper_configs.get_paper_configs(),
+git clone https://github.com/bondtesty/let-it-be-simple.git
+cd let-it-be-simple
 uv sync
 ```
 
-Both patches are verified to apply cleanly on the pinned base commit.
+That is the whole setup: `uv sync` installs the vendored `openpi` package and
+all of its dependencies from `uv.lock`.
 
-## What the patch adds (the method)
+External artifacts you still need to obtain yourself (all governed by their
+own licenses, none of them shipped here):
 
-`patches/01` extends `Pi0Config` / `Pi0` with two things:
+- **Gemma / PaliGemma weights** — required to train or evaluate any policy.
+  Subject to the separate terms in `LICENSE_GEMMA.txt`; download separately
+  per the upstream instructions in `docs` of the openpi repo. The converted
+  V-JEPA 2.1 weights referenced by the paper configs are resolved through
+  `LBS_CKPT_ROOT` (below).
+- **LIBERO benchmark assets** — needed only for `eval/`; point
+  `LIBERO_CLIENT_LIBERO_PATH` (and the docker build context under
+  `eval/libero_rollout/`) at your own LIBERO checkout.
+- **LeRobot datasets / checkpoints** — resolved through `LBS_*` variables.
+
+## The method (what changed in the source)
+
+Relative to the vendored openpi base commit, the model code
+(`src/openpi/models/`) implements two things:
 
 1. **High-noise time shift** (`noise_shift_alpha=α`). Training timesteps are
    drawn as usual (OpenPI's `t_op ~ Beta(1.5, 1)`) and remapped by
@@ -85,9 +98,10 @@ uv run scripts/train.py pi0_libero_simvla_tiny_siglip4_head4_w768_150k \
     --exp-name=my_run --overwrite
 ```
 
-`configs/CONFIG_NAMES.txt` lists every released run name. The hyperparameters
-behind each paper table row (batch/steps/LR, encoder truncation, α, horizon)
-are inside `configs/paper_configs.py`; see REPRODUCTION_MAP.md for the
+`src/openpi/training/misc/CONFIG_NAMES.txt` lists every released run name.
+The hyperparameters behind each paper table row (batch/steps/LR, encoder
+truncation, α, horizon) are inside
+`src/openpi/training/misc/paper_configs.py`; see REPRODUCTION_MAP.md for the
 table → config-name mapping (and the few rows still awaiting author
 confirmation).
 
@@ -124,7 +138,7 @@ remains importable/`--help`-able on a fresh clone.
 
 | Variable | Meaning | Default | When you must set it |
 |---|---|---|---|
-| `LBS_CKPT_ROOT` | Root of the checkpoint tree: trained openpi policy checkpoints and the converted V-JEPA 2.1 weights referenced by `configs/paper_configs.py` | `/path/to/checkpoints` | To train, evaluate, or run checkpoint-loading diagnostics |
+| `LBS_CKPT_ROOT` | Root of the checkpoint tree: trained openpi policy checkpoints and the converted V-JEPA 2.1 weights referenced by `src/openpi/training/misc/paper_configs.py` | `/path/to/checkpoints` | To train, evaluate, or run checkpoint-loading diagnostics |
 | `LBS_RESULTS_ROOT` | Root of the experiment-artifact tree read by `figures/render_*.py` (experiment result JSONs, diagnostic/eval CSVs, tile images) | `results` | To render figures or run diagnostics that read produced artifacts |
 | `LBS_LIBERO_PLUS_ROOT` | Location of the LIBERO-Plus checkout / LeRobot snapshot used by the LIBERO-Plus readiness check and eval wrapper | `/path/to/libero-plus` | For anything LIBERO-Plus |
 | `LBS_OPENPI_ROOT` | Checkout whose `experiments/pi0-endpoint-geometry/` directory contains the canonical helper modules imported by `diagnostics/pi0_local_geometry_libero.py` | this repo's root | Only for that diagnostic; the script errors out with instructions if the modules are not found |
@@ -135,8 +149,14 @@ match your own storage layout.
 
 ## License
 
-Apache-2.0 (same as openpi, on which this code is based;
-Copyright (c) Physical Intelligence). See `LICENSE`.
+- `src/`, `packages/`, `scripts/`, `examples/libero/`, `pyproject.toml`,
+  `uv.lock`: Apache-2.0, based on openpi (Copyright (c) Physical
+  Intelligence). See `LICENSE` and the modification list in `NOTICE`.
+- The Gemma / PaliGemma model weights are *not* included; they are
+  distributed under the separate terms in `LICENSE_GEMMA.txt` and must be
+  downloaded separately.
+- The paper-specific additions (`src/openpi/training/misc/paper_configs.py`,
+  `experiments/`, `diagnostics/`, `eval/`, `figures/`): Apache-2.0.
 
 ## Citation
 

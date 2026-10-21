@@ -3,16 +3,18 @@
 Paper claim → artifact in this repo → status.
 Legend: ✅ released · ⚠️ released but needs author confirmation · ⛔ not in this release (yet).
 Only configs behind paper-reported data points are published here; historical
-hyperparameter-tuning configs are not part of this release.
+hyperparameter-tuning configs are not part of this release. (The method and
+configs are integrated into the vendored openpi source; `NOTICE` lists the
+exact modified files relative to the vendored base commit `981483d`.)
 
 | Paper element | Artifact | Status |
 |---|---|---|
-| Method: high-noise time shift `t' = αt/(1+(α−1)t)` | `patches/01` (`noise_shift_alpha` in `Pi0Config`/`Pi0`) | ✅ |
+| Method: high-noise time shift `t' = αt/(1+(α−1)t)` | `src/openpi/models/pi0.py` + `pi0_config.py` (`noise_shift_alpha` in `Pi0Config`/`Pi0`) | ✅ |
 | Method: one-step decoding at the noise endpoint | same model, endpoint evaluation (`eval/`, `diagnostics/`) | ✅ |
-| Method: SimVLA action head (tiny / full encoder) | `patches/01` (`cond_head_mode="simvla"`), `configs/paper_configs.py` | ✅ |
-| Main table: schedule ablation (Tiny H10, 1-step, incl. LIBERO-Long 95.6%) | `configs/paper_configs.py` + `eval/eval_libero.{sh,py}` | ⚠️ config↔row mapping; checkpoints ⛔ |
+| Method: SimVLA action head (tiny / full encoder) | `src/openpi/models/simvla_head.py` (used via `cond_head_mode="simvla"` in `pi0.py`), `src/openpi/training/misc/paper_configs.py` | ✅ |
+| Main table: schedule ablation (Tiny H10, 1-step, incl. LIBERO-Long 95.6%) | `src/openpi/training/misc/paper_configs.py` + `eval/eval_libero.{sh,py}` | ⚠️ config↔row mapping; checkpoints ⛔ |
 | Table: full-encoder confirmation | same, `pi0_libero_simvla_k4_nop_h10_cosine_150k_bs256` | ⚠️ mapping; checkpoints ⛔ |
-| Learned action-start controls (zero / N(0,1) init) | `patches/01` decoding path + configs | ⚠️ confirm which flags |
+| Learned action-start controls (zero / N(0,1) init) | `src/openpi/models/pi0.py` decoding path + configs | ⚠️ confirm which flags |
 | Horizon ablation (H10→H40) | `*_h40*` configs + eval | ⚠️ mapping |
 | Condition ablations (σ, text/proprio removal, closed-loop failure) | `diagnostics/analyze_libero_conditional_action_spread.py` + configs | ⚠️ |
 | LIBERO-Plus full-condition sweep | `eval/eval_libero_plus.sh`, `eval/collect_libero_plus_eval_results.py` | ⚠️ env is third-party |

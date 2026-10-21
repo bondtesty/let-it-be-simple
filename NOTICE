@@ -1,0 +1,82 @@
+# Provenance and modification notice
+
+This repository is self-contained: it vendors the openpi codebase so that
+readers do not need a separate openpi checkout.
+
+## Vendored upstream code
+
+- **Upstream project:** [Physical-Intelligence/openpi](https://github.com/Physical-Intelligence/openpi)
+- **Base commit:** `981483dca0fd9acba698fea00aa6e52d56a66c58`
+- **License:** Apache-2.0 (see `LICENSE`; Copyright (c) Physical Intelligence)
+
+Vendored from the base commit (unmodified unless listed below):
+
+- `src/` — the openpi Python package
+- `packages/` — the `openpi-client` workspace package
+- `scripts/` — training / serving entry points
+- `examples/libero/` — LIBERO eval client used by `eval/`
+- `pyproject.toml`, `uv.lock`
+
+The Gemma / PaliGemma model weights are **not** distributed in this
+repository. They are subject to the separate terms in
+`LICENSE_GEMMA.txt` and must be downloaded separately (see the README).
+
+## Files modified by this project (Apache-2.0 section 4.3)
+
+The method of the paper (Let It Be Simple, arXiv:2606.05737) lives
+directly in the source tree. The following five upstream files are
+modified relative to the base commit:
+
+1. `src/openpi/models/model.py` — adds the `PI0_SCD` / `PI0_A2A` /
+   `PI0_RAE` model-type enum values, a `state_history` observation
+   field (A2A), and relaxed image/image-mask shape annotations for
+   video inputs.
+2. `src/openpi/models/pi0.py` — adds the high-noise time-shift
+   schedule (`noise_shift_alpha`), the SimVLA action head
+   (`cond_head_mode="simvla"`), learned action-start controls, and
+   frequency-weighted loss paths.
+3. `src/openpi/models/pi0_config.py` — adds the configuration knobs for
+   the above: `noise_shift_alpha`, `time_sampling`, `cond_head_mode`,
+   and the `simvla_*` head parameters.
+4. `src/openpi/policies/policy_config.py` — threads
+   `data_config.quantile_norm_keys` into the `Normalize` / `Unnormalize`
+   transforms (eval-server path).
+5. `src/openpi/serving/websocket_policy_server.py` — serving-side
+   additions for the eval server.
+
+## Additional files taken from the authors' openpi development branch
+
+The five modifications above depend on code that does not exist in the
+base commit. The following files are taken verbatim from the authors'
+development branch of openpi (the same branch the modifications were
+developed on):
+
+- `src/openpi/models/simvla_head.py` (new) — SimVLA transformer action head
+- `src/openpi/models/action_patchifier.py` (new) — action patchifier used by the model/config
+- `src/openpi/models/perceiver_resampler.py` (new) — perceiver resampler used by the SimVLA head
+- `src/openpi/models/vjepa.py` (new) — V-JEPA vision encoder support
+- `src/openpi/training/weight_loaders.py` (modified) — adds
+  `TruncatedPaliGemmaWeightLoader`, `Pi0FromPaliGemmaWeightLoader`,
+  `SelectiveTruncationWeightLoader`, and a configurable `missing_regex`
+- `src/openpi/transforms.py` (modified) — adds `quantile_keys` support
+  to `Normalize` / `Unnormalize`
+- `scripts/train.py` (modified) — applies `backbone_lr_multiplier`
+  gradient scaling, robust checkpoint restore, and offline LeRobot
+  version-check handling
+
+## Minimal integration edits
+
+- `src/openpi/training/config.py` — (a) registers the paper configs:
+  `import openpi.training.misc.paper_configs as paper_configs` and
+  `*paper_configs.get_paper_configs()` in `_CONFIGS`; (b) adds the
+  `quantile_norm_keys` field on `DataConfig` and the
+  `backbone_lr_multiplier` field on `TrainConfig`, both verbatim from
+  the development branch, required by the files above.
+
+## Files original to this repository
+
+- `src/openpi/training/misc/paper_configs.py` — the paper's 25 run configs
+- `src/openpi/training/misc/CONFIG_NAMES.txt` — the released config names
+- `experiments/`, `diagnostics/`, `eval/`, `figures/` — theory
+  validations, diagnostic protocols, LIBERO evaluation harness, and
+  figure rendering scripts
