@@ -170,12 +170,21 @@ confirmation).
 
 ## Evaluate
 
+Arguments are positional:
+
 ```bash
-# LIBERO (4 suites; the paper uses 500 episodes/suite)
-bash eval/eval_libero.sh --config <config_name> --checkpoint <path>
+bash eval/eval_libero.sh <config_name> <checkpoint_dir> <task_suite> [num_flow_steps]
+# e.g. the released tiny policy, LIBERO-Long, one decoding step
+bash eval/eval_libero.sh pi0_libero_simvla_tiny_siglip4_head4_w768_50k_h10_a4 \
+     "$LBS_CKPT_ROOT/pi0_libero_simvla_tiny_siglip4_head4_w768_50k_h10_a4" libero_10 1
 # LIBERO-Plus / LIBERO-Pro collectors: eval/collect_libero_{plus,pro}_eval_results.py
 # rollout environment: eval/libero_rollout/ (Dockerfile + compose)
 ```
+
+`num_flow_steps` is the number of Euler integration steps. Omitting it keeps
+the model default of 10 steps; the paper's one-step numbers use `1`. Suites:
+`libero_spatial`, `libero_object`, `libero_goal`, `libero_10` (Long). The
+paper's LIBERO protocol is 500 episodes per suite (stated in Tables 3 and 7).
 
 LIBERO-Plus and LIBERO-Pro are third-party benchmarks; follow their repos for
 environment setup.
