@@ -12,7 +12,6 @@ asymmetry mirrors the VLA result.
   plus custom `(α, β)`; matches the paper table (d256 / 8-head transformer,
   warmup 5 → cosine to min-LR 1e-6, AdamW wd 0.01, grad clip 1.0, effective
   batch 64×grad_accum 4 = 128, 50 epochs, vocab = pad/unk/eos + 10 digits).
-- `train_mnist_v3.py` — the base v3 pipeline (architecture reference).
 - `train_mnist_v3_ablation.py` — mask-type control (causal / bidirectional /
   no_mask) behind the encoder/decoder controls in the appendix.
 

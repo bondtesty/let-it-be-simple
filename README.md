@@ -125,7 +125,8 @@ experiments/      self-contained validations of the theory
                           local-geometry diagnostics and figure scripts
 diagnostics/      velocity-MSE, endpoint-Jacobian / sigma-1, local geometry,
                   condition ablations, mode-collapse probe, latency profiling
-eval/             LIBERO / LIBERO-Plus / LIBERO-Pro evaluation
+eval/             LIBERO / LIBERO-Plus / LIBERO-Pro, plus the policy
+                    server used by third-party benchmark harnesses
 figures/          scripts that render the paper figures from diagnostic output
 ```
 
@@ -181,6 +182,16 @@ bash eval/eval_libero.sh pi0_libero_simvla_tiny_siglip4_head4_w768_50k_h10_a4 \
 # LIBERO-Plus / LIBERO-Pro collectors: eval/collect_libero_{plus,pro}_eval_results.py
 # rollout environment: eval/libero_rollout/ (Dockerfile + compose)
 ```
+
+**Third-party benchmarks (paper Table 4).** Those two rows evaluate the official
+StarVLA (Qwen2.5) and X-VLA checkpoints inside their own upstream evaluation
+stacks, so neither the benchmarks nor their harnesses are vendored here. What is
+ours: `eval/vla_eval_openpi_model_server.py`, an OpenPI policy server for AllenAI's
+`vla-evaluation-harness` (the CALVIN ABC->D column), and the observation / action
+transforms for both benchmarks in `src/openpi/policies/calvin_policy.py` and
+`src/openpi/policies/simplerenv_policy.py`. To reuse them, check the harness out
+under `third_party/` and put its `src/` on `PYTHONPATH` next to this repo's `src/`
+and `packages/openpi-client/src/`.
 
 `num_flow_steps` is the number of Euler integration steps. Omitting it keeps
 the model default of 10 steps; the paper's one-step numbers use `1`. Suites:
