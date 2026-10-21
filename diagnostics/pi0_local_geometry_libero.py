@@ -24,9 +24,12 @@ Run with the openpi venv:
         XLA_PYTHON_CLIENT_PREALLOCATE=false .venv/bin/python \
         /path/to/let-it-be-simple/diagnostics/pi0_local_geometry_libero.py
 
-Canonical pi0-endpoint-geometry helper modules are resolved from
-LBS_OPENPI_ROOT (default: this repo's root); checkpoints from LBS_CKPT_ROOT.
-See README "Environment variables".
+This script imports analysis helpers from the scratch experiment tree the
+paper's local-geometry figures were produced in (pi0_endpoint_sigma1,
+pi0_episode_sigma1, pi0_tscan_sigma1, pi0_dense_sheet_track,
+pi0_completemap_liber_v2, pi0_pop_recode3, pi0_purenoise_h20_fig8_control).
+Those helper modules are not part of this release, so the script is shipped
+for provenance and exits with an explicit message unless you supply them.
 """
 
 import json
@@ -40,8 +43,8 @@ import jax.numpy as jnp
 import numpy as np
 
 HERE = Path(__file__).resolve()
-_OPENPI_ROOT = Path(os.environ.get("LBS_OPENPI_ROOT", str(HERE.parents[1])))
-sys.path.insert(0, str(_OPENPI_ROOT / "experiments" / "pi0-endpoint-geometry"))
+# No machine-specific sys.path injection: the helper modules named in the
+# module docstring are not shipped, and the import block below reports that.
 import matplotlib
 
 matplotlib.use("Agg")
@@ -58,9 +61,9 @@ try:
     from pi0_tscan_sigma1 import norm_action_chunk  # noqa: E402
 except ImportError as exc:
     raise SystemExit(
-        f"cannot import canonical pi0-endpoint-geometry modules ({exc}); "
-        "set LBS_OPENPI_ROOT to a checkout whose experiments/pi0-endpoint-geometry "
-        "directory contains them (see README 'Environment variables')"
+        f"cannot import the pi0-endpoint-geometry analysis helpers ({exc}); "
+        "those helper modules are not part of this release, so this diagnostic "
+        "only runs in the environment where the paper's analysis was produced"
     )
 
 from openpi.models import model as _model  # noqa: E402

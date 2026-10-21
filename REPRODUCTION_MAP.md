@@ -23,7 +23,8 @@ exact modified files relative to the vendored base commit `981483d`.)
 | Theory validation: 8-mode toy | `experiments/toy_8mode/` | ⚠️ canonical-script pick |
 | Theory validation: MNIST image-to-text (+ schedule ablation) | `experiments/mnist_i2t/` | ⚠️ canonical-script pick |
 | Velocity-MSE profiles (Figs. vloss/horizon) | `diagnostics/build_paper_noise_time_vloss.py` | ✅ script; source CSVs ⛔ |
-| Transport geometry: endpoint Jacobian / σ1 (ours + MeanFlow/pMF/π0/π0.5/StarVLA/X-VLA/…) | `diagnostics/analyze_external_*_velocity.py`, `analyze_*_endpoint_noise_sensitivity.py`, `pi0_local_geometry_libero.py` | ✅ scripts; external checkpoints per their licenses |
+| Transport geometry: endpoint Jacobian / σ1 (ours + MeanFlow/pMF/π0/π0.5/StarVLA/X-VLA/…) | `diagnostics/analyze_external_*_velocity.py`, `analyze_*_endpoint_noise_sensitivity.py` | ✅ scripts; external checkpoints per their licenses |
+| Local-geometry probe on LIBERO rollouts | `diagnostics/pi0_local_geometry_libero.py` | ⚠️ imports analysis helpers from the scratch experiment tree (pi0_endpoint_sigma1, pi0_episode_sigma1, pi0_tscan_sigma1, pi0_dense_sheet_track, pi0_completemap_liber_v2, pi0_pop_recode3, pi0_purenoise_h20_fig8_control) that are **not part of this release**; shipped for provenance, exits with an explicit message otherwise |
 | Solver-convergence control | `diagnostics/analyze_solver_convergence.py` | ✅ |
 | Mode-collapse / prompt-sensitivity control | `diagnostics/test_mode_collapse.py` | ✅ |
 | Latency decomposition & Pareto (RTX 5090) | `diagnostics/profile_libero_decoding_latency.py`, `generate_latency_pareto.py` | ✅ script; checkpoints ⛔ |
