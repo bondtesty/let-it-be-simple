@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extend the CoRL ring-GMM toy with matched-covariance geometry controls.
+"""Extend the ring-GMM toy with matched-covariance geometry controls.
 
 This script reuses the exact posterior, model, and training code from the
 paper's original Figure 1 generator. It compares target distributions with the
@@ -87,7 +87,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def import_original_toy(path: Path):
-    spec = importlib.util.spec_from_file_location("corl_ring_gmm_toy", path)
+    spec = importlib.util.spec_from_file_location("ring_gmm_toy", path)
     if spec is None or spec.loader is None:
         raise ImportError(f"Could not import original toy script: {path}")
     module = importlib.util.module_from_spec(spec)

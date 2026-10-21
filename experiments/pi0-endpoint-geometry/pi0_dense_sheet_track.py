@@ -1,4 +1,4 @@
-"""Issue-9 (comment 5580238230) B/C: dense fixed-source condition sweep around gripper transitions.
+"""Dense fixed-source condition sweep around gripper transitions.
 
 Around 3 to_closed events (h20_uni checkpoint), observation frame f runs at RAW
 STRIDE 1 over [b-H-8, b+8]. Same fixed K=4 sources and random blocks as the v2

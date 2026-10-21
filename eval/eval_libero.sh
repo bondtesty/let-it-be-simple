@@ -14,7 +14,6 @@
 #   - Line 75: SERVER_PID=""  — ensures clean server PID tracking on ytchen-train
 #   - Line 233: EGL_PLATFORM=surfaceless (no MUJOCO_GL=egl) — GPU rendering on ytchen-train
 #   - Line 241: uses main_patched.py (identical to main.py, just a backup copy)
-# NOTE: Lines 75+233 synced from bridge (2026-04-15) per @cyteena decision.
 # See also: memory/openpi-git-sync-2026-04-15.md
 
 set -euo pipefail

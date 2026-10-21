@@ -40,7 +40,6 @@ EXTERNAL_SELECTION = {
     "simvla_libero_plus_h10_tasks40_noise7": {
         "label": "π0 LIBERO-Plus",
         "priority": "P0",
-        "status": "internal paper checkpoint; probe already complete",
     },
     "dexbotic_pi0_maniskill2_h50_tasks5_noise7": {
         "label": "DB-PI0 ManiSkill2",

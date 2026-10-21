@@ -1,4 +1,4 @@
-"""Issue 9 v2: matrix-free complete-map geometry for LIBERO.
+"""Matrix-free complete-map geometry for LIBERO.
 
 Correctness fixes relative to v1:
 1) event boundaries are aligned by ORIGINAL dataset frame id, never by an index
@@ -55,7 +55,7 @@ import lerobot.common.datasets.lerobot_dataset as lerobot_dataset  # noqa: E402
 
 RESULTS_DIR = HERE / "results"
 
-# Existing checkpoint family from Issue 9. h50 has no strict uniform pair.
+# Existing checkpoint family. h50 has no strict uniform pair.
 CELLS = {
     "h10_a4": (
         "pi0_libero_simvla_tiny_siglip4_head4_w768_50k_h10_a4",
@@ -264,7 +264,7 @@ def estimate_geometry(
     Utop = jnp.einsum("sdr,srk->sdk", Ubase, Ub)
 
     H = jnp.asarray(hutch)
-    # Scalar-per-source accumulation (issue-9 fix, comment 5588565754): the
+    # Scalar-per-source accumulation (accuracy fix): the
     # previous (S, 8)-slot accumulation divided each probe slot by n_probes
     # while only summing n_probes/8 chunks into it -> E[trace] = ||J||_F^2 / 8.
     # Sum over BOTH probe and output axes, then divide by the probe count.
@@ -306,7 +306,7 @@ def summarize_metrics(m):
     s1 = m["sigma1"]
     tr = m["trace"]
     isr = m["isr"]
-    # STALE-FIELD NOTE (issue-9, comment 5588565754): all trace-derived fields
+    # STALE-FIELD NOTE: all trace-derived fields
     # produced BEFORE the scalar-per-source accumulator fix are invalid
     # (previous (S,8)-slot accumulation biased the mean low by ~8x):
     #   trace, log_trace, isr, log_isr, rms_gain,
@@ -458,7 +458,7 @@ def main():
 
     cfg_name, exp = CELLS[CELL]
     ckpt = CKPT_BASE / cfg_name / exp / str(STEP)
-    log(f"=== Issue 9 v2 {CELL}: {ckpt}")
+    log(f"=== complete-map v2 {CELL}: {ckpt}")
 
     config = _config.get_config(cfg_name)
     policy = policy_config.create_trained_policy(config, str(ckpt))

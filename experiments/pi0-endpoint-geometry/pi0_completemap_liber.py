@@ -1,4 +1,4 @@
-"""Issue 9 part C: complete-sampler transport geometry for LIBERO.
+"""Complete-sampler transport geometry for LIBERO.
 
 T_c(z) = full deployed generator: Euler rollout of sample_actions (v-pred,
 default solver), t: 1 -> 0, x_{t-1/N} = x_t - (1/N) v(x_t, t), replicated
@@ -10,7 +10,7 @@ Checkpoints: h20_a4, h10_a4 (interp), h10 pure-noise.
 NFE sweep: {1, 2, 4, 10} (deployed default 10).
 Readouts per (obs, z): sigma_1, Tr(J^T J), 1/stable-rank, RMS gain, plus
 the instantaneous endpoint residual sigma_1(J_Dinst, t=1) for the paired
-comparison requested by issue 9.
+comparison.
 
 Sanity: rollout(nfe=1) matches model.sample_actions(num_steps=1, noise=z).
 

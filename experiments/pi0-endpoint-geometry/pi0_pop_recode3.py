@@ -1,4 +1,4 @@
-"""Issue-9 (comment 5596228693) final semantic cleanup: PERSISTENT generated
+"""PERSISTENT generated
 timing + right-censoring, applied offline to the saved grip traces.
 
 Decoder states (consistent with the canonical raw-event detector, PERSIST=3):

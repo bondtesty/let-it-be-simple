@@ -1,4 +1,4 @@
-"""Issue-9 (comment 5581496558) 4: decisive 1D causal scan across the restricted
+"""Decisive 1D causal scan across the restricted
 singular direction at selected high-gap points.
 
 For each point (episode, f, source k) with known gap>5 (incl. the ep1295

@@ -166,8 +166,8 @@ uv run scripts/train.py pi0_libero_simvla_tiny_siglip4_head4_w768_150k \
 The hyperparameters behind each paper table row (batch/steps/LR, encoder
 truncation, α, horizon) are inside
 `src/openpi/training/misc/paper_configs.py`; see REPRODUCTION_MAP.md for the
-table → config-name mapping (and the few rows still awaiting author
-confirmation).
+table → artifact mapping and release status. Config names are abbreviations,
+not a full spec — match on the parsed fields, not on the name.
 
 ## Evaluate
 
