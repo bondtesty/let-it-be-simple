@@ -25,7 +25,7 @@ evaluation harness.
 
 ```
 patches/          overlay onto openpi (the method lives here)
-configs/          the paper's LIBERO run configs (85 TrainConfigs)
+configs/          the paper's LIBERO run configs (25 TrainConfigs)
 experiments/      self-contained validations of the theory
   toy_8mode/        controlled 8-mode Gaussian toy
   mnist_i2t/        image-to-text MNIST flow experiment
@@ -81,7 +81,7 @@ One-step decoding is the same model evaluated at the pure-noise endpoint
 
 ```bash
 # example: a tiny H10 policy from the schedule ablation family
-uv run scripts/train.py pi0_libero_simvla_k4_nop_h10_cosine_50k_gemma12_siglip6 \
+uv run scripts/train.py pi0_libero_simvla_tiny_siglip4_head4_w768_150k \
     --exp-name=my_run --overwrite
 ```
 

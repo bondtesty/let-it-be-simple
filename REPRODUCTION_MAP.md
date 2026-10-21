@@ -2,6 +2,8 @@
 
 Paper claim → artifact in this repo → status.
 Legend: ✅ released · ⚠️ released but needs author confirmation · ⛔ not in this release (yet).
+Only configs behind paper-reported data points are published here; historical
+hyperparameter-tuning configs are not part of this release.
 
 | Paper element | Artifact | Status |
 |---|---|---|
@@ -9,7 +11,7 @@ Legend: ✅ released · ⚠️ released but needs author confirmation · ⛔ not
 | Method: one-step decoding at the noise endpoint | same model, endpoint evaluation (`eval/`, `diagnostics/`) | ✅ |
 | Method: SimVLA action head (tiny / full encoder) | `patches/01` (`cond_head_mode="simvla"`), `configs/paper_configs.py` | ✅ |
 | Main table: schedule ablation (Tiny H10, 1-step, incl. LIBERO-Long 95.6%) | `configs/paper_configs.py` + `eval/eval_libero.{sh,py}` | ⚠️ config↔row mapping; checkpoints ⛔ |
-| Table: full-encoder confirmation | same, `*_150k_*` configs | ⚠️ mapping; checkpoints ⛔ |
+| Table: full-encoder confirmation | same, `pi0_libero_simvla_k4_nop_h10_cosine_150k_bs256` | ⚠️ mapping; checkpoints ⛔ |
 | Learned action-start controls (zero / N(0,1) init) | `patches/01` decoding path + configs | ⚠️ confirm which flags |
 | Horizon ablation (H10→H40) | `*_h40*` configs + eval | ⚠️ mapping |
 | Condition ablations (σ, text/proprio removal, closed-loop failure) | `diagnostics/analyze_libero_conditional_action_spread.py` + configs | ⚠️ |
@@ -48,9 +50,10 @@ Legend: ✅ released · ⚠️ released but needs author confirmation · ⛔ not
 
    **Gap:** the paper's **α=8** rows (Table 1, Table 13), the α=8 column of Table 14, and the
    depth-8 α=4/α=8 cells of Table 15 have **no matching config in this repo** — the released
-   configs cover α ∈ {unset(=uniform), 1, 2, 3, 4} only (verified over the full 171-config set
-   before pruning: 140×3.0, 8×4.0, 7×2.0, 5×1.0, 5×0.0, 1×5.0). Those runs used a config that
-   was never committed. Same for the learned-start settings behind Table 6.
+   configs cover α ∈ {unset(=uniform), 1, 2, 3, 4} only (25 configs after the 2026-10-21 prune:
+   9×3.0, 4×unset, 4×1.0, 4×2.0, 4×4.0; the pre-prune 85-config set had no α=8 either, and
+   neither did the original 171-config experiment repo). Those runs used a config that was
+   never committed. Same for the learned-start settings behind Table 6.
 3. MNIST / 8-mode: `experiments/*/README.md` list the candidate scripts I matched by
    hyperparameters — confirm the canonical ones (see each README's NEEDS AUTHOR CONFIRMATION).
 4. Checkpoint release: HF repo name & which of the tiny/full checkpoints to ship.
