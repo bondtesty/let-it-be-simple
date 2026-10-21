@@ -27,11 +27,30 @@ Legend: ✅ released · ⚠️ released but needs author confirmation · ⛔ not
 
 ## Open questions for the author
 
-1. **α bookkeeping**: most `pi0_libero_simvla_*` configs carry `noise_shift_alpha=3.0`,
-   while the paper figures advertise α=4 (6 configs at 4.0 exist). Which family produced
-   the reported tables — and is the `k4` in config names historical?
-2. Exact config names behind each row of the schedule-ablation and full-encoder tables
-   (`configs/CONFIG_NAMES.txt` has 85 candidates).
+1. **α bookkeeping — RESOLVED (2026-10-21).** `k4` in config names denotes the **Full-encoder
+   architecture** (SigLIP layer count unset = all 27 layers, `paligemma_variant` unset = gemma_2b),
+   **not** α=4. The paper reports α=3 for the Full-encoder results (Table 2 caption states
+   `$\alpha=3$`), and the matching config `pi0_libero_simvla_k4_nop_h10_cosine_150k_bs256`
+   carries `noise_shift_alpha=3.0`, `peak_lr=2e-4`, `num_train_steps=150_000`,
+   `action_horizon=10` — consistent with the Full column of the configuration table.
+   Config *names* are unreliable in general: e.g. `..._head8_50k` does not set head depth (stays 4).
+   Always match on parsed values (`ast`), never on name substrings.
+2. **Table → config mapping (derived by hyperparameter matching, author to confirm).**
+   The paper never names a config, so the mapping below was reconstructed from parsed values:
+
+   | Paper item | Hyperparameters | Config (prefix `pi0_libero_simvla_` omitted) |
+   |---|---|---|
+   | Table 1 / Table 13 | Tiny (gemma-4-layer w512, SigLIP 4, head d4/w768), H=10 | uniform=`tiny_siglip4_head4_w768_150k_uniform`; α=3=`tiny_siglip4_head4_w768_150k`; α=4=`tiny_siglip4_head4_w768_50k_h10_a4`; pure noise=`tiny_siglip4_head4_w768_150k_pure_noise` |
+   | Table 2, Fig 4a | Full encoder, α=3, bs256, 150k, lr 2e-4 | `k4_nop_h10_cosine_150k_bs256` |
+   | Table 14 (H × schedule) | Tiny, flow steps 1 | `tiny_siglip4_head4_w768_50k_h{10,20,30,40}{,_uniform,_a1,_a2,_a4}` (sparse; blanks in the table = not trained) |
+   | Table 15 (Appendix I) | Tiny H=10, head depth 8 × {none, per-layer, RoPE} | `tiny_simvla_depth8_{50k,layerpos_50k,rope_50k}` |
+   | Tables 3–6, 8, 9, Figs 2, 3, 14, 15 | official / third-party checkpoints, MNIST, real robot | no config in this file |
+
+   **Gap:** the paper's **α=8** rows (Table 1, Table 13), the α=8 column of Table 14, and the
+   depth-8 α=4/α=8 cells of Table 15 have **no matching config in this repo** — the released
+   configs cover α ∈ {unset(=uniform), 1, 2, 3, 4} only (verified over the full 171-config set
+   before pruning: 140×3.0, 8×4.0, 7×2.0, 5×1.0, 5×0.0, 1×5.0). Those runs used a config that
+   was never committed. Same for the learned-start settings behind Table 6.
 3. MNIST / 8-mode: `experiments/*/README.md` list the candidate scripts I matched by
    hyperparameters — confirm the canonical ones (see each README's NEEDS AUTHOR CONFIRMATION).
 4. Checkpoint release: HF repo name & which of the tiny/full checkpoints to ship.
