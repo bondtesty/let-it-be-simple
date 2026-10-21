@@ -74,6 +74,12 @@ released code reproduces all of those protocols.
   method in-tree (`patches/` removed), the local-geometry analysis helpers
   vendored under `experiments/pi0-endpoint-geometry/`, and the config set
   pruned to the 25 runs the paper actually reports.
+- **[Oct 2026]** Two LIBERO policies behind the paper's headline numbers are
+  on the Hugging Face Hub -- see [Checkpoints](#checkpoints).
+- **[Oct 2026]** Dropped the plotting layer and the artifact-only
+  summarizers: they read a result tree we do not publish and could not run
+  outside our setup. Everything that remains runs on a released checkpoint or
+  public data.
 - **[Jun 2026]** Paper released on arXiv ([2606.05737](https://arxiv.org/abs/2606.05737)).
 
 ## Requirements
@@ -265,9 +271,10 @@ match your own storage layout.
 
 `REPRODUCTION_MAP.md` maps every paper claim to the artifact that produces it,
 with ✅ / ⚠️ / ⛔ status and a short list of what is out of scope. In short: the
-method, run configs, theory validations and all diagnostic protocols are
-released; trained checkpoints, diagnostic output files and the robot hardware
-are not.
+method, run configs, theory validations and diagnostic protocols are released,
+and so are the two LIBERO policies behind Tables 1-2. Not released: the
+checkpoints for the remaining paper runs, the diagnostic output trees, the
+robot hardware.
 
 ## License
 
