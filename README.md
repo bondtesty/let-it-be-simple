@@ -86,12 +86,17 @@ bash eval/eval_libero.sh pi0_libero_simvla_tiny_siglip4_head4_w768_50k_h10_a4 \
 
 Suites are `libero_spatial`, `libero_object`, `libero_goal`, `libero_10`.
 `num_flow_steps` counts Euler steps and defaults to 10; the paper's one-step
-numbers use `1`. LIBERO-Plus and LIBERO-Pro are third-party — set them up per
-their own repos. The third-party checkpoints of Tables 3–4 are evaluated inside
-their upstream harnesses; ours is `eval/vla_eval_openpi_model_server.py`
-(for AllenAI's `vla-evaluation-harness`, the CALVIN column) together with the
-transforms in `src/openpi/policies/calvin_policy.py` and
-`simplerenv_policy.py`.
+numbers use `1`.
+
+Everything else runs on [vla-evaluation-harness](https://github.com/allenai/vla-evaluation-harness):
+check it out under `third_party/`, put its `src/` on `PYTHONPATH` next to this
+repo's `src/` and `packages/openpi-client/src/`, and serve a policy with
+`eval/vla_eval_openpi_model_server.py`. That covers LIBERO-Plus and LIBERO-Pro
+(`eval/collect_libero_{plus,pro}_eval_results.py` flatten the harness summaries
+into a CSV) and the CALVIN / SimplerEnv columns; the observation / action
+transforms for those two live in `src/openpi/policies/calvin_policy.py` and
+`simplerenv_policy.py`. The benchmarks themselves are third-party — set them up
+per their own repos.
 
 ### Diagnostics
 
@@ -102,9 +107,11 @@ figures are not included — they read a result tree we do not publish.
 
 ### Acknowledgements
 
-This code builds on [openpi](https://github.com/Physical-Intelligence/openpi) and
-Gemma / PaliGemma weights. LIBERO, LIBERO-Plus, LIBERO-Pro, SimplerEnv, CALVIN
-and the evaluated open-source checkpoints belong to their respective authors.
+Evaluation is built on [vla-evaluation-harness](https://github.com/allenai/vla-evaluation-harness)
+(AllenAI). The code builds on [openpi](https://github.com/Physical-Intelligence/openpi)
+and Gemma / PaliGemma weights. LIBERO, LIBERO-Plus, LIBERO-Pro, SimplerEnv,
+CALVIN and the evaluated open-source checkpoints belong to their respective
+authors.
 
 ### License
 
